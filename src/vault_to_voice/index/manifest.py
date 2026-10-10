@@ -190,3 +190,24 @@ class Manifest:
         self.conn.execute("DELETE FROM chunks")
         self.conn.execute("DELETE FROM notes")
         self.conn.commit()
+
+    def save_ideas(self, ideas: list) -> None:
+        keep = {i.idea_id for i in ideas}
+        for (idea_id,) in self.conn.execute(
+            "SELECT idea_id FROM ideas WHERE status = 'new'"
+        ).fetchall():
+            if idea_id not in keep:
+                self.conn.execute("DELETE FROM ideas WHERE idea_id = ?", (idea_id,))
+        for idea in ideas:
+            self.conn.execute(
+                "INSERT INTO ideas (idea_id, data, status) VALUES (?, ?, ?) "
+                "ON CONFLICT(idea_id) DO UPDATE SET data = excluded.data, status = excluded.status",
+                (idea.idea_id, idea.model_dump_json(), idea.status),
+            )
+        self.conn.commit()
+
+    def list_ideas(self) -> list:
+        from vault_to_voice.ideas.detector import Idea
+
+        rows = self.conn.execute("SELECT data FROM ideas ORDER BY idea_id")
+        return [Idea.model_validate_json(r[0]) for r in rows]
