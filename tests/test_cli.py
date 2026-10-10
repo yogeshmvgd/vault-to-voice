@@ -2,7 +2,7 @@ import pytest
 from typer.testing import CliRunner
 
 from tests.conftest import note_text
-from tests.fakes import FakeLLMClient
+from tests.fakes import FakeLLMClient, graph_responses
 from vault_to_voice import cli
 from vault_to_voice.config import SAMPLE_VAULT
 from vault_to_voice.ideas.labeler import ClusterLabel
@@ -18,6 +18,7 @@ def fake_llm():
             OpinionScore: lambda _: OpinionScore(score=0.8, highlights=["strong view"]),
             ToneSummary: lambda _: ToneSummary(tone=["wry"], voice_notes="Punchy.", exemplars=[]),
             ClusterLabel: lambda _: ClusterLabel(title="Idea", angle="Angle.", theme="theme"),
+            **graph_responses(),
         }
     )
 
@@ -29,6 +30,7 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setenv("VAULT_FORMAT", "flat")
     monkeypatch.setenv("MIN_NOTES", "2")
     monkeypatch.setenv("MIN_OPINIONATED", "2")
+    monkeypatch.setenv("OUTBOX_DIR", str(tmp_path / "outbox"))
     monkeypatch.setattr(cli, "make_llm", lambda settings: fake_llm())
     return tmp_path
 
@@ -108,3 +110,73 @@ def test_style_also_saved_to_store(env, vault_dir, write_note):
     write_note("n.md", note_text("n", "boss fight fair"))
     assert runner.invoke(cli.app, ["style", "--vault", str(vault_dir)]).exit_code == 0
     assert get_style(make_store(Settings().store_path))["version"] == 1
+
+
+def _ready_idea(vault_dir, write_note):
+    from tests.fakes import NOTES
+    from vault_to_voice.config import Settings
+    from vault_to_voice.index.manifest import Manifest
+
+    for nid, body in NOTES.items():
+        write_note(f"{nid}.md", note_text(nid, body))
+    # theme ideas need >= 6 works (one per flat note) so clustering can split them
+    write_note("x1.md", note_text("x1", "Fair boss fights reward patience and honest rules."))
+    assert runner.invoke(cli.app, ["ingest", "--vault", str(vault_dir)]).exit_code == 0
+    assert runner.invoke(cli.app, ["ideas"]).exit_code == 0
+    return Manifest(Settings().manifest_path).list_ideas()[0].idea_id
+
+
+def test_write_full_session(env, vault_dir, write_note):
+    idea_id = _ready_idea(vault_dir, write_note)
+    r = runner.invoke(cli.app, ["write", idea_id], input="a1\na2\na3\napprove\napprove\n")
+    assert r.exit_code == 0, r.output
+    assert "Q1/5" in r.output and "Outline: Fair Bosses" in r.output and "published:" in r.output
+    assert list((env / "outbox").glob("*.md"))
+    again = runner.invoke(cli.app, ["write", idea_id])
+    assert again.exit_code == 0 and "already published" in again.output
+
+
+def test_write_resumes_after_interruption(env, vault_dir, write_note):
+    idea_id = _ready_idea(vault_dir, write_note)
+    first = runner.invoke(cli.app, ["write", idea_id], input="a1\n")  # input ends at question 2
+    assert first.exit_code != 0
+    second = runner.invoke(cli.app, ["write", idea_id], input="a2\na3\napprove\napprove\n")
+    assert second.exit_code == 0, second.output
+    assert "resuming saved session" in second.output and "Q2/5" in second.output
+    assert "published:" in second.output
+
+
+def test_write_unknown_idea(env):
+    r = runner.invoke(cli.app, ["write", "idea_nope"])
+    assert r.exit_code == 1 and "unknown idea" in r.output
+
+
+@pytest.mark.integration
+def test_write_on_sample_vault_with_minilm(monkeypatch, tmp_path):
+    import json
+    import re
+
+    from vault_to_voice.config import Settings
+    from vault_to_voice.graph.state import Paragraph, SectionText, Sentence
+    from vault_to_voice.index.manifest import Manifest
+
+    def cite_first_note(prompt):
+        note_id, text = re.search(r'<note id="([^"]+)">\n[^\n]*\n([^\n]+)', prompt).groups()
+        return SectionText(
+            paragraphs=[Paragraph(sentences=[Sentence(text=text, sources=[note_id])])]
+        )
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("OUTBOX_DIR", str(tmp_path / "outbox"))
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    llm = fake_llm()
+    llm.responses[SectionText] = cite_first_note
+    monkeypatch.setattr(cli, "make_llm", lambda settings: llm)
+    assert runner.invoke(cli.app, ["ingest"]).exit_code == 0
+    assert runner.invoke(cli.app, ["ideas"]).exit_code == 0
+    idea_id = Manifest(Settings().manifest_path).list_ideas()[0].idea_id
+    r = runner.invoke(cli.app, ["write", idea_id], input="a1\na2\na3\napprove\napprove\n")
+    assert r.exit_code == 0, r.output
+    post = next((tmp_path / "outbox").glob("*.md"))
+    side = json.loads(post.with_suffix(".sources.json").read_text(encoding="utf-8"))
+    assert side["citation_coverage"] == 1.0
