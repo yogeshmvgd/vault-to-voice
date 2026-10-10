@@ -11,6 +11,13 @@ def _no_langsmith(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _no_real_provider_keys(monkeypatch):
+    """A real key in .env must never reach tests; the fake value also wins over .env."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-real")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-not-real")
+
+
 @pytest.fixture
 def vault_dir(tmp_path) -> Path:
     d = tmp_path / "vault"

@@ -1,7 +1,8 @@
+import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -74,6 +75,9 @@ class Settings(BaseSettings):
     langsmith_tracing: bool = False
     langsmith_api_key: str = ""
     langsmith_project: str = "vault-to-voice"
+    # Provider SDKs read keys from os.environ, not from .env: see export_provider_keys.
+    openai_api_key: str = Field(default="", repr=False)
+    anthropic_api_key: str = Field(default="", repr=False)
 
     @property
     def categories(self) -> dict[str, str]:
@@ -108,3 +112,16 @@ class Settings(BaseSettings):
     @property
     def store_path(self) -> Path:
         return self.data_dir / "store.db"
+
+
+def export_provider_keys(settings: Settings) -> None:
+    """Make API keys from .env visible to the OpenAI/Anthropic SDKs (they read os.environ).
+
+    A key already set in the real environment wins; blank keys are not exported.
+    """
+    for name, value in (
+        ("OPENAI_API_KEY", settings.openai_api_key),
+        ("ANTHROPIC_API_KEY", settings.anthropic_api_key),
+    ):
+        if value and not os.environ.get(name):
+            os.environ[name] = value

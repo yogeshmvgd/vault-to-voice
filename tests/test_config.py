@@ -50,3 +50,31 @@ def test_obsidian_defaults_and_categories():
 def test_invalid_category_type_rejected():
     with pytest.raises(ValidationError, match="category"):
         Settings(_env_file=None, category_headings="games=videogame")
+
+
+def test_provider_keys_from_env_file_exported(tmp_path, monkeypatch):
+    from vault_to_voice.config import export_provider_keys
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    env = tmp_path / ".env"
+    env.write_text("OPENAI_API_KEY=sk-from-file\nANTHROPIC_API_KEY=\n", encoding="utf-8")
+    s = Settings(_env_file=env)
+    assert "sk-from-file" not in repr(s)
+    export_provider_keys(s)
+    import os
+
+    assert os.environ["OPENAI_API_KEY"] == "sk-from-file"
+    assert "ANTHROPIC_API_KEY" not in os.environ  # blank keys are not exported
+
+
+def test_real_env_var_wins_over_env_file(tmp_path, monkeypatch):
+    import os
+
+    from vault_to_voice.config import export_provider_keys
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-shell")
+    env = tmp_path / ".env"
+    env.write_text("OPENAI_API_KEY=sk-file\n", encoding="utf-8")
+    export_provider_keys(Settings(_env_file=env))
+    assert os.environ["OPENAI_API_KEY"] == "sk-shell"

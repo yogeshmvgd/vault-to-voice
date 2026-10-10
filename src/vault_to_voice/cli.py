@@ -7,7 +7,7 @@ import typer
 from langgraph.types import Command
 from pydantic import ValidationError
 
-from vault_to_voice.config import Settings
+from vault_to_voice.config import Settings, export_provider_keys
 from vault_to_voice.graph.builder import build_post_graph
 from vault_to_voice.graph.checkpoint import make_checkpointer, make_store
 from vault_to_voice.graph.deps import GraphDeps
@@ -57,10 +57,12 @@ def make_llm(settings: Settings) -> LLMClient:
 
 def _settings(vault: Path | None = None) -> Settings:
     try:
-        return Settings(vault_path=vault) if vault else Settings()
+        s = Settings(vault_path=vault) if vault else Settings()
     except ValidationError as exc:
         typer.echo(str(exc))
         raise typer.Exit(2) from exc
+    export_provider_keys(s)
+    return s
 
 
 @app.command()
