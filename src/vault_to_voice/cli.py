@@ -5,6 +5,8 @@ import typer
 from pydantic import ValidationError
 
 from vault_to_voice.config import Settings
+from vault_to_voice.graph.checkpoint import make_store
+from vault_to_voice.graph.memory import put_style
 from vault_to_voice.ideas.detector import IndexOutOfSyncError, detect_ideas
 from vault_to_voice.ideas.opinion import OpinionScorer
 from vault_to_voice.index.embedder import make_embedder
@@ -88,6 +90,7 @@ def style(vault: Path | None = VaultOpt):
     profile = save_profile(
         build_style_profile(notes, make_llm(s), seed=s.seed), s.style_profile_path
     )
+    put_style(make_store(s.store_path), profile)
     typer.echo(f"style profile v{profile.version} saved to {s.style_profile_path}")
     typer.echo(f"tone: {', '.join(profile.tone.tone)}")
 

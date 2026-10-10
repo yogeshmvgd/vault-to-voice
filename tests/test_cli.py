@@ -98,3 +98,13 @@ def test_ideas_show_kind(env, vault_dir, write_note):
     runner.invoke(cli.app, ["ingest", "--vault", str(vault_dir)])
     r = runner.invoke(cli.app, ["ideas"])
     assert r.exit_code == 0 and "[theme]" in r.output
+
+
+def test_style_also_saved_to_store(env, vault_dir, write_note):
+    from vault_to_voice.config import Settings
+    from vault_to_voice.graph.checkpoint import make_store
+    from vault_to_voice.graph.memory import get_style
+
+    write_note("n.md", note_text("n", "boss fight fair"))
+    assert runner.invoke(cli.app, ["style", "--vault", str(vault_dir)]).exit_code == 0
+    assert get_style(make_store(Settings().store_path))["version"] == 1
