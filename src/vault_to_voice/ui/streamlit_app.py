@@ -35,9 +35,64 @@ def drive(events: Iterator[Event]) -> None:
     st.rerun()
 
 
+def _ingest_summary(r: dict) -> str:
+    text = (
+        f"Indexed: new={r['new']} changed={r['changed']} deleted={r['deleted']} "
+        f"unchanged={r['unchanged']} scored={r['scored']}"
+    )
+    if r.get("stats"):
+        st_ = r["stats"]
+        text += f" (daily files={st_['daily_files']}, entries={st_['entries']})"
+    return text
+
+
+def _style_summary(r: dict) -> str:
+    return f"Style profile v{r['version']} saved. Tone: {', '.join(r['tone'])}. {r['voice_notes']}"
+
+
+def _ideas_summary(ideas: list) -> str:
+    return f"Found {len(ideas)} idea(s)." if ideas else "No ideas yet (need more notes)."
+
+
+def run_setup(label: str, call, summarize) -> None:
+    """Run one setup action (can take minutes on a local model), then redraw."""
+    with st.status(f"{label}...", expanded=False) as box:
+        try:
+            st.session_state["setup_msg"] = summarize(call())
+            box.update(label=f"{label}: done", state="complete")
+        except (ApiError, httpx.HTTPError) as exc:
+            st.session_state["flash"] = f"{label} failed: {getattr(exc, 'detail', exc)}"
+            box.update(label=f"{label}: failed", state="error")
+    st.rerun()
+
+
+def setup_panel(client: ApiClient) -> None:
+    with st.expander("Setup", expanded=False):
+        try:
+            cfg = client.config()
+            st.caption(
+                f"Vault: `{cfg['vault_path']}` ({cfg['vault_format']})  \n"
+                f"LLM: `{cfg['llm_model']}` · embeddings: `{cfg['embedding_provider']}`  \n"
+                f"Data: `{cfg['data_dir']}`"
+            )
+        except (ApiError, httpx.HTTPError) as exc:
+            st.caption(f"config unavailable: {exc}")
+        score = st.checkbox("Score opinions while indexing", value=True, key="setup_score")
+        if st.button("Index vault", key="setup_ingest", width="stretch"):
+            run_setup("Index vault", lambda: client.ingest(no_score=not score), _ingest_summary)
+        if st.button("Build style profile", key="setup_style", width="stretch"):
+            run_setup("Build style profile", client.build_style, _style_summary)
+        if st.button("Find ideas", key="setup_ideas", width="stretch"):
+            run_setup("Find ideas", client.detect_ideas, _ideas_summary)
+        msg = st.session_state.pop("setup_msg", None)
+        if msg:
+            st.success(msg)
+
+
 def sidebar(client: ApiClient) -> None:
     with st.sidebar:
         st.header("vault-to-voice")
+        setup_panel(client)
         try:
             ideas = client.ideas()
             threads = {t["thread_id"]: t["status"] for t in client.threads()}
@@ -46,7 +101,10 @@ def sidebar(client: ApiClient) -> None:
             return
         st.subheader("Ideas")
         if not ideas:
-            st.caption("No ideas yet. Run `v2v ingest`, `v2v style`, then `v2v ideas`.")
+            st.caption(
+                "No ideas yet. Open Setup above and click Index vault, "
+                "Build style profile, then Find ideas."
+            )
         for idea in ideas:
             status = threads.get(idea["idea_id"], "new")
             label = f"{idea['title']} · {status}"

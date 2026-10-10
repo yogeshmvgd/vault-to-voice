@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from streamlit.testing.v1 import AppTest
 
 import vault_to_voice.ui
+from tests.conftest import note_text
 from tests.fakes import graph_responses, make_service
 from vault_to_voice.api.app import create_app
 from vault_to_voice.graph.nodes.critic import CriticReview
@@ -167,3 +168,46 @@ def test_draft_view_shows_guard_warnings(ui):
     answer_interview(at)
     at.button(key="ol_approve").click().run()
     assert at.warning[0].value.startswith("Note n1 contains instruction-like text")
+
+
+def test_setup_panel_shows_config_and_runs_actions(ui):
+    client, _, _ = ui()
+    at = app_for(client)
+    captions = " ".join(c.value for c in at.sidebar.caption)
+    assert "flat" in captions and "hash" in captions and "key" not in captions.lower()
+    at.button(key="setup_ingest").click().run()
+    assert not at.exception, at.exception
+    assert "Indexed" in at.sidebar.success[0].value and "unchanged=5" in at.sidebar.success[0].value
+    at.checkbox(key="setup_score").uncheck().run()
+    at.button(key="setup_ingest").click().run()
+    assert "scored=0" in at.sidebar.success[0].value
+    at.button(key="setup_style").click().run()
+    assert not at.exception, at.exception
+    assert "Style profile v1" in at.sidebar.success[0].value
+    assert "wry" in at.sidebar.success[0].value
+
+
+def test_find_ideas_refreshes_the_list(ui):
+    client, tid, _ = ui()
+    deps = client.http.app.state.service.deps
+    deps.manifest.save_ideas([])
+    for i in range(4):  # new notes, so Index vault scores them for opinion
+        text = note_text(f"b{i}", f"boss fight fair difficulty note {i}")
+        (deps.settings.vault_path / f"b{i}.md").write_text(text, encoding="utf-8")
+    at = app_for(client)
+    assert "Find ideas" in " ".join(c.value for c in at.sidebar.caption)
+    assert not any(b.key == f"idea_{tid}" for b in at.sidebar.button)
+    at.button(key="setup_ingest").click().run()
+    at.button(key="setup_ideas").click().run()
+    assert not at.exception, at.exception
+    assert "idea" in at.sidebar.success[0].value
+    assert any(b.key.startswith("idea_") for b in at.sidebar.button)
+
+
+def test_setup_error_is_shown_in_page(ui):
+    client, _, _ = ui()
+    client.http.app.state.service.deps.manifest.set_meta("dirty", "1")
+    at = app_for(client)
+    at.button(key="setup_ideas").click().run()
+    assert not at.exception, at.exception
+    assert any("ingest" in e.value for e in at.error)
