@@ -115,3 +115,21 @@ def test_schema_version_change_forces_rebuild(tmp_path, vault_dir, write_note):
     m.set_meta("schema", "1")
     r = ingest(reader, m, s, HashEmbedder())
     assert r.rebuilt and r.new == 1 and m.get_meta("schema") == SCHEMA_VERSION
+
+
+def test_obsidian_edit_one_entry_reembeds_only_it(tmp_path, vault_dir, write_note):
+    from vault_to_voice.vault.obsidian import ObsidianVaultReader
+
+    p = write_note(
+        "Daily/10-10-2026.md", "## Games\n- Played [[Hades]].\n## Books\n- Read [[Dune]].\n"
+    )
+    m = Manifest(tmp_path / "m.db")
+    s = FaissStore(tmp_path / "f.index", 64)
+    reader = ObsidianVaultReader(vault_dir)
+    ingest(reader, m, s, HashEmbedder())
+    p.write_text(
+        "## Games\n- Played [[Hades]].\n## Books\n- Read [[Dune]] twice.\n", encoding="utf-8"
+    )
+    emb = CountingEmbedder()
+    r = ingest(reader, m, s, emb)
+    assert (r.changed, r.unchanged, emb.calls) == (1, 1, 1)
