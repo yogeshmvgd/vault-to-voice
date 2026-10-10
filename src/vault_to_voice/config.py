@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -24,6 +24,20 @@ def check_vault_path(path: Path, repo_root: Path = REPO_ROOT) -> Path:
     return resolved
 
 
+_NOTE_TYPES = {"game", "book", "movie", "other"}
+
+
+def _parse_categories(raw: str) -> dict[str, str]:
+    out = {}
+    for pair in filter(None, (p.strip() for p in raw.split(","))):
+        heading, _, note_type = pair.partition("=")
+        note_type = note_type.strip().lower()
+        if note_type not in _NOTE_TYPES:
+            raise ValueError(f"category heading {heading!r} maps to unknown type {note_type!r}")
+        out[heading.strip().lower()] = note_type
+    return out
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", validate_default=True)
 
@@ -43,6 +57,19 @@ class Settings(BaseSettings):
     min_opinionated: int = 3
     opinion_threshold: float = 0.5
     seed: int = 42
+    vault_format: Literal["obsidian", "flat"] = "obsidian"
+    daily_folder: str = "Daily"
+    daily_date_format: str = "%d-%m-%Y"
+    category_headings: str = "games=game,books=book,movies=movie"
+
+    @property
+    def categories(self) -> dict[str, str]:
+        return _parse_categories(self.category_headings)
+
+    @model_validator(mode="after")
+    def _check_categories(self):
+        _parse_categories(self.category_headings)
+        return self
 
     @field_validator("vault_path")
     @classmethod

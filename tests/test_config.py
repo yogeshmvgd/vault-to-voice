@@ -33,3 +33,20 @@ def test_derived_paths(tmp_path):
     assert s.manifest_path == tmp_path / "manifest.db"
     assert s.faiss_path == tmp_path / "faiss.index"
     assert s.style_profile_path == tmp_path / "style_profile.json"
+
+
+def test_obsidian_defaults_and_categories():
+    s = Settings(_env_file=None)
+    assert (s.vault_format, s.daily_folder, s.daily_date_format) == (
+        "obsidian",
+        "Daily",
+        "%d-%m-%Y",
+    )
+    assert s.categories == {"games": "game", "books": "book", "movies": "movie"}
+    custom = Settings(_env_file=None, category_headings="Gaming=game, Reading = book")
+    assert custom.categories == {"gaming": "game", "reading": "book"}
+
+
+def test_invalid_category_type_rejected():
+    with pytest.raises(ValidationError, match="category"):
+        Settings(_env_file=None, category_headings="games=videogame")
