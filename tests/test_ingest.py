@@ -94,3 +94,12 @@ def test_opinion_scored_once_and_rescored_on_change(tmp_path, vault_dir, write_n
     p.write_text(note_text("a", "Hated it"), encoding="utf-8")
     assert ingest(reader, m, s, HashEmbedder(), scorer).scored == 1
     assert m.get_note("a").opinion_score == 0.7
+
+
+def test_dirty_flag_forces_rebuild_even_when_counts_match(tmp_path, vault_dir, write_note):
+    write_note("a.md", note_text("a", "x"))
+    reader, m, s = setup(tmp_path, vault_dir)
+    ingest(reader, m, s, HashEmbedder())
+    m.set_meta("dirty", "1")  # simulate crash after SQLite writes, before store.save()
+    r = ingest(reader, m, s, HashEmbedder())
+    assert r.rebuilt and m.get_meta("dirty") == "0"

@@ -76,3 +76,12 @@ def test_hash_changes_with_content(vault_dir, write_note):
 def test_missing_root_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         list(FilesystemVaultReader(tmp_path / "nope").iter_notes())
+
+
+def test_duplicate_fallback_collision_still_unique(vault_dir, write_note):
+    write_note("a.md", note_text("b", "first"))
+    write_note("b.md", note_text("b", "second"))
+    write_note("日.md", "---\ntitle: x\n---\nthird\n")
+    write_note("本.md", "---\ntitle: y\n---\nfourth\n")
+    ids = [n.id for n in FilesystemVaultReader(vault_dir).iter_notes()]
+    assert len(ids) == 4 and len(set(ids)) == 4 and "" not in ids

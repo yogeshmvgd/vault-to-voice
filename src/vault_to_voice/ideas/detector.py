@@ -11,6 +11,10 @@ from vault_to_voice.index.manifest import Manifest
 from vault_to_voice.llm import LLMClient
 
 
+class IndexOutOfSyncError(RuntimeError):
+    pass
+
+
 class Idea(BaseModel):
     idea_id: str
     title: str
@@ -35,6 +39,11 @@ def detect_ideas(
     opinion_threshold: float,
     seed: int,
 ) -> list[Idea]:
+    if len(store) != manifest.chunk_count() or manifest.get_meta("dirty") == "1":
+        raise IndexOutOfSyncError(
+            "Vector index is missing or out of sync with the manifest "
+            "(e.g. EMBEDDING_PROVIDER changed). Run `v2v ingest` first."
+        )
     note_ids, vectors = note_embeddings(manifest, store)
     if not note_ids:
         manifest.save_ideas([])

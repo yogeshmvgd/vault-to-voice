@@ -1,10 +1,11 @@
+import sys
 from pathlib import Path
 
 import typer
 from pydantic import ValidationError
 
 from vault_to_voice.config import Settings
-from vault_to_voice.ideas.detector import detect_ideas
+from vault_to_voice.ideas.detector import IndexOutOfSyncError, detect_ideas
 from vault_to_voice.ideas.opinion import OpinionScorer
 from vault_to_voice.index.embedder import make_embedder
 from vault_to_voice.index.faiss_store import FaissStore
@@ -19,6 +20,18 @@ app = typer.Typer(
 )
 
 VaultOpt = typer.Option(None, "--vault", help="Vault path (overrides VAULT_PATH).")
+
+
+def _safe_console() -> None:
+    """Avoid UnicodeEncodeError on legacy consoles (e.g. Windows cp1252) for non-ASCII paths."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
+
+
+@app.callback()
+def _main() -> None:
+    _safe_console()
 
 
 def make_llm(settings: Settings) -> LLMClient:
@@ -77,15 +90,19 @@ def ideas():
     """Cluster indexed notes and list post ideas."""
     s = _settings()
     embedder = make_embedder(s)
-    found = detect_ideas(
-        Manifest(s.manifest_path),
-        FaissStore(s.faiss_path, embedder.dim),
-        make_llm(s),
-        min_notes=s.min_notes,
-        min_opinionated=s.min_opinionated,
-        opinion_threshold=s.opinion_threshold,
-        seed=s.seed,
-    )
+    try:
+        found = detect_ideas(
+            Manifest(s.manifest_path),
+            FaissStore(s.faiss_path, embedder.dim),
+            make_llm(s),
+            min_notes=s.min_notes,
+            min_opinionated=s.min_opinionated,
+            opinion_threshold=s.opinion_threshold,
+            seed=s.seed,
+        )
+    except IndexOutOfSyncError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(1) from exc
     if not found:
         typer.echo("no ideas yet")
     for idea in found:

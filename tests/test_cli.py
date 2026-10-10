@@ -57,3 +57,25 @@ def test_sample_vault_with_minilm_yields_ideas(monkeypatch, tmp_path):
     assert runner.invoke(cli.app, ["ingest"]).exit_code == 0
     r = runner.invoke(cli.app, ["ideas"])
     assert r.exit_code == 0 and r.output.count("idea_") >= 2, r.output
+
+
+def test_safe_console_survives_cp1252(monkeypatch):
+    import io
+    import sys
+
+    stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+    monkeypatch.setattr(sys, "stdout", stream)
+    cli._safe_console()
+    print("本")  # must not raise UnicodeEncodeError
+
+
+def test_ideas_before_ingest_in_sync_message(env):
+    from vault_to_voice.index.manifest import Manifest
+    from vault_to_voice.vault.models import Note
+
+    m = Manifest(env / "data" / "manifest.db")
+    m.upsert_note(Note(id="a", title="a", body="b", path="a.md", hash="h"))
+    m.add_chunks("a", ["p"])
+    m.close()
+    r = runner.invoke(cli.app, ["ideas"])
+    assert r.exit_code == 1 and "v2v ingest" in r.output

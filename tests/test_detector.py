@@ -84,3 +84,14 @@ def test_label_prompt_wraps_notes(tmp_path):
     detect_ideas(m, s, fake, **KW)
     prompt = fake.calls[0][1]
     assert prompt.count("<note id=") == 4 and "opinion g0n0" in prompt
+
+
+def test_out_of_sync_index_raises_clear_error(tmp_path):
+    import pytest
+
+    from vault_to_voice.ideas.detector import IndexOutOfSyncError
+
+    m, _ = build(tmp_path, [[0.9, 0.8, 0.7, 0.6]])
+    wrong_dim = FaissStore(tmp_path / "other.index", 4)  # e.g. provider switched
+    with pytest.raises(IndexOutOfSyncError, match="v2v ingest"):
+        detect_ideas(m, wrong_dim, FakeLLMClient({}), **KW)

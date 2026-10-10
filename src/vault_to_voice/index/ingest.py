@@ -34,7 +34,9 @@ def ingest(
     signature = f"{embedder.name}:{embedder.dim}"
 
     rebuilt = False
-    out_of_sync = len(store) != manifest.chunk_count()
+    # "dirty" is set before any mutation and cleared after store.save(): catches crashes even
+    # when the chunk count happens to match.
+    out_of_sync = len(store) != manifest.chunk_count() or manifest.get_meta("dirty") == "1"
     if manifest.get_meta("embedder") != signature or out_of_sync:
         rebuilt = manifest.chunk_count() > 0 or len(store) > 0
         if rebuilt:
@@ -43,6 +45,7 @@ def ingest(
         store.reset()
         manifest.set_meta("embedder", signature)
 
+    manifest.set_meta("dirty", "1")
     diff = manifest.diff(notes)
     for note_id in diff.deleted:
         store.remove(manifest.delete_note(note_id))
@@ -53,6 +56,7 @@ def ingest(
         store.add(ids, embedder.embed([scrub_pii(p) for p in paragraphs]))
         manifest.upsert_note(note)
     store.save()
+    manifest.set_meta("dirty", "0")
 
     scored = 0
     if scorer is not None:

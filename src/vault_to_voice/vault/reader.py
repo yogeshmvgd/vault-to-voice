@@ -21,6 +21,12 @@ def slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
+def _path_id(rel: Path) -> str:
+    """Slug of the vault-relative path; hash fallback when the slug is empty (non-ASCII)."""
+    posix = rel.with_suffix("").as_posix()
+    return slugify(posix) or "note-" + hashlib.sha1(posix.encode()).hexdigest()[:10]
+
+
 def _parse_date(value: object) -> dt.date | None:
     if isinstance(value, dt.datetime):
         return value.date()
@@ -50,7 +56,11 @@ class FilesystemVaultReader:
             if note is None:
                 continue
             if note.id in seen:
-                new_id = slugify(rel.with_suffix("").as_posix())
+                new_id = _path_id(rel)
+                n = 2
+                while new_id in seen:
+                    new_id = f"{_path_id(rel)}-{n}"
+                    n += 1
                 log.warning(
                     "duplicate_note_id",
                     id=note.id,
@@ -77,7 +87,7 @@ class FilesystemVaultReader:
         if note_type not in get_args(NoteType):
             note_type = "other"
         return Note(
-            id=str(meta.get("id") or slugify(rel.with_suffix("").as_posix())),
+            id=str(meta.get("id") or _path_id(rel)),
             title=str(meta.get("title") or path.stem),
             type=note_type,
             date=_parse_date(meta.get("date")),
