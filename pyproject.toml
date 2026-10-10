@@ -18,6 +18,8 @@ dependencies = [
   "langchain-openai>=0.2",
   "typer>=0.12",
   "structlog>=24.1",
+  "langgraph>=1.2",
+  "langgraph-checkpoint-sqlite>=3.1",
 ]
 
 [project.optional-dependencies]

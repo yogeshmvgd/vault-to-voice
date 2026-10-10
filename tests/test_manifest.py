@@ -98,3 +98,34 @@ def test_old_database_gets_new_columns(tmp_path):
     conn.close()
     row = Manifest(path).get_note("a")
     assert (row.work_id, row.links) == (None, [])
+
+
+def test_idea_status_and_get():
+    from vault_to_voice.ideas.detector import Idea
+
+    m = Manifest(":memory:")
+    idea = Idea(
+        idea_id="idea_x", title="t", angle="a", theme="th", note_ids=["a"], opinion_score=0.5
+    )
+    m.save_ideas([idea])
+    m.set_idea_status("idea_x", "done")
+    assert m.get_idea("idea_x").status == "done"
+    assert m.get_idea("nope") is None
+
+
+def test_set_status_unknown_idea_raises():
+    import pytest
+
+    with pytest.raises(KeyError):
+        Manifest(":memory:").set_idea_status("nope", "done")
+
+
+def test_manifest_usable_from_other_thread(tmp_path):
+    import threading
+
+    m = Manifest(tmp_path / "m.db")
+    out = {}
+    t = threading.Thread(target=lambda: out.setdefault("n", m.chunk_count()))
+    t.start()
+    t.join()
+    assert out["n"] == 0

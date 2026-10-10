@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     min_opinionated: int = 3
     opinion_threshold: float = 0.5
     seed: int = 42
+    interview_min_questions: int = 3
+    interview_max_questions: int = 5
+    max_review_rounds: int = 3
+    citation_support: float = 0.55
+    citation_reject: float = 0.30
+    related_notes: int = 2
+    related_min_score: float = 0.5
     vault_format: Literal["obsidian", "flat"] = "obsidian"
     daily_folder: str = "Daily"
     daily_date_format: str = "%d-%m-%Y"
@@ -87,3 +94,11 @@ class Settings(BaseSettings):
     @property
     def style_profile_path(self) -> Path:
         return self.data_dir / "style_profile.json"
+
+    @property
+    def checkpoint_path(self) -> Path:
+        return self.data_dir / "checkpoints.db"
+
+    @property
+    def store_path(self) -> Path:
+        return self.data_dir / "store.db"
