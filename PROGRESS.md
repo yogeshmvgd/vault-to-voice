@@ -1,13 +1,13 @@
 # Progress
 
 ## Current
-- Session: S0 (planning) — complete when M1 plan is written.
+- Session: S0 (planning) — complete.
 - Next: **S1 — M1a** (scaffold, config + vault guard, sample vault, vault reader, manifest) per `docs/superpowers/plans/M1-core-data.md`.
 
 ## Roadmap
 | # | Session | Driver | Status |
 |---|---|---|---|
-| S0 | git init, CLAUDE.md, PROGRESS.md, M1 plan | Claude | in progress |
+| S0 | git init, CLAUDE.md, PROGRESS.md, M1 plan | Claude | done |
 | S1 | M1a scaffold, config/guard, sample vault, reader, manifest | Claude | todo |
 | S2 | M1b embedders, FAISS store, ingest, opinion scoring | Claude | todo |
 | S3 | M1c style profile, idea detection, CLI | Claude | todo |
