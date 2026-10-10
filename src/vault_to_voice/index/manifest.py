@@ -229,3 +229,21 @@ class Manifest:
 
         rows = self.conn.execute("SELECT data FROM ideas ORDER BY idea_id")
         return [Idea.model_validate_json(r[0]) for r in rows]
+
+    def get_idea(self, idea_id: str):
+        from vault_to_voice.ideas.detector import Idea
+
+        r = self.conn.execute("SELECT data FROM ideas WHERE idea_id = ?", (idea_id,)).fetchone()
+        return Idea.model_validate_json(r[0]) if r else None
+
+    def set_idea_status(self, idea_id: str, status: str) -> None:
+        r = self.conn.execute("SELECT data FROM ideas WHERE idea_id = ?", (idea_id,)).fetchone()
+        if r is None:
+            raise KeyError(idea_id)
+        data = json.loads(r[0])
+        data["status"] = status
+        self.conn.execute(
+            "UPDATE ideas SET data = ?, status = ? WHERE idea_id = ?",
+            (json.dumps(data), status, idea_id),
+        )
+        self.conn.commit()

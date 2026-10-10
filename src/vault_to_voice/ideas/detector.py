@@ -1,8 +1,10 @@
 import hashlib
+from collections import defaultdict
 from statistics import mean
 from typing import Literal
 
-from pydantic import BaseModel
+import numpy as np
+from pydantic import BaseModel, Field
 
 from vault_to_voice.ideas.cluster import cluster, note_embeddings
 from vault_to_voice.ideas.labeler import label_cluster
@@ -23,10 +25,16 @@ class Idea(BaseModel):
     note_ids: list[str]
     opinion_score: float
     status: Literal["new", "done"] = "new"
+    kind: Literal["work", "theme"] = "theme"
+    work_ids: list[str] = Field(default_factory=list)
 
 
-def make_idea_id(note_ids: list[str]) -> str:
-    return "idea_" + hashlib.sha1(",".join(sorted(note_ids)).encode()).hexdigest()[:10]
+def make_idea_id(ids: list[str]) -> str:
+    return "idea_" + hashlib.sha1(",".join(sorted(ids)).encode()).hexdigest()[:10]
+
+
+def work_idea_id(work_id: str) -> str:
+    return f"idea_work_{work_id}"
 
 
 def detect_ideas(
@@ -48,31 +56,56 @@ def detect_ideas(
     if not note_ids:
         manifest.save_ideas([])
         return []
-    labels = cluster(vectors, seed=seed)
     rows = {r.note_id: r for r in manifest.notes()}
     existing = {i.idea_id: i for i in manifest.list_ideas()}
+    vector_of = dict(zip(note_ids, vectors, strict=True))
+
+    groups: dict[str, list[str]] = defaultdict(list)
+    for nid in note_ids:
+        groups[rows[nid].work_id or nid].append(nid)
+
+    def qualifies(members: list[str]) -> bool:
+        scores = [rows[n].opinion_score or 0.0 for n in members]
+        return len(members) >= min_notes and (
+            sum(s >= opinion_threshold for s in scores) >= min_opinionated
+        )
+
+    def make(idea_id: str, kind: str, works: list[str], members: list[str]) -> Idea:
+        score = round(mean(rows[n].opinion_score or 0.0 for n in members), 3)
+        if idea_id in existing:  # keep title/angle/status; refresh membership
+            return existing[idea_id].model_copy(
+                update={"note_ids": members, "work_ids": works, "opinion_score": score}
+            )
+        lab = label_cluster(llm, [rows[n] for n in members], kind=kind)
+        return Idea(
+            idea_id=idea_id,
+            title=lab.title,
+            angle=lab.angle,
+            theme=lab.theme,
+            note_ids=members,
+            opinion_score=score,
+            kind=kind,
+            work_ids=works,
+        )
 
     ideas: list[Idea] = []
+    for work, members in sorted(groups.items()):
+        members = sorted(members)
+        if qualifies(members):
+            ideas.append(make(work_idea_id(work), "work", [work], members))
+
+    works = sorted(groups)
+    work_vectors = np.vstack([np.mean([vector_of[n] for n in groups[w]], axis=0) for w in works])
+    norms = np.linalg.norm(work_vectors, axis=1, keepdims=True)
+    work_vectors = work_vectors / np.where(norms == 0, 1.0, norms)
+    labels = cluster(work_vectors.astype(np.float32), seed=seed)
     for label in sorted(set(labels.tolist())):
-        members = sorted(n for n, lab in zip(note_ids, labels, strict=True) if lab == label)
-        scores = [rows[n].opinion_score or 0.0 for n in members]
-        opinionated = sum(score >= opinion_threshold for score in scores)
-        if len(members) < min_notes or opinionated < min_opinionated:
+        members_works = [w for w, lab in zip(works, labels, strict=True) if lab == label]
+        if len(members_works) < 2:
             continue
-        idea_id = make_idea_id(members)
-        if idea_id in existing:
-            ideas.append(existing[idea_id])
-            continue
-        lab = label_cluster(llm, [rows[n] for n in members])
-        ideas.append(
-            Idea(
-                idea_id=idea_id,
-                title=lab.title,
-                angle=lab.angle,
-                theme=lab.theme,
-                note_ids=members,
-                opinion_score=round(mean(scores), 3),
-            )
-        )
+        members = sorted(n for w in members_works for n in groups[w])
+        if qualifies(members):
+            ideas.append(make(make_idea_id(members_works), "theme", members_works, members))
+
     manifest.save_ideas(ideas)
     return ideas

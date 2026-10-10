@@ -95,3 +95,75 @@ def test_out_of_sync_index_raises_clear_error(tmp_path):
     wrong_dim = FaissStore(tmp_path / "other.index", 4)  # e.g. provider switched
     with pytest.raises(IndexOutOfSyncError, match="v2v ingest"):
         detect_ideas(m, wrong_dim, FakeLLMClient({}), **KW)
+
+
+def build_works(tmp_path, works):
+    """works: list of (work_id, axis, scores) — every note of a work points along `axis`."""
+    m = Manifest(":memory:")
+    s = FaissStore(tmp_path / "w.index", 8)
+    rng = np.random.default_rng(1)
+    for work_id, axis, scores in works:
+        for i, score in enumerate(scores):
+            nid = f"{work_id}@2026-01-{i + 1:02d}"
+            m.upsert_note(
+                Note(
+                    id=nid, title=work_id, body="b", path=f"Daily/{i}.md", hash="h", work_id=work_id
+                )
+            )
+            m.set_opinion(nid, score, [f"opinion {nid}"])
+            v = np.eye(8)[axis] + rng.normal(0, 0.01, 8)
+            s.add(m.add_chunks(nid, ["p"]), (v / np.linalg.norm(v)).reshape(1, -1))
+    return m, s
+
+
+def test_work_idea_for_well_covered_work(tmp_path):
+    m, s = build_works(tmp_path, [("witcher-3", 0, [0.9, 0.8, 0.7, 0.2]), ("dune", 1, [0.9, 0.9])])
+    ideas = detect_ideas(m, s, FakeLLMClient({ClusterLabel: lambda _: label()}), **KW)
+    work = [i for i in ideas if i.kind == "work"]
+    assert [i.idea_id for i in work] == ["idea_work_witcher-3"]
+    assert work[0].work_ids == ["witcher-3"] and len(work[0].note_ids) == 4
+
+
+def test_work_idea_id_stable_as_entries_grow(tmp_path):
+    m, s = build_works(tmp_path, [("witcher-3", 0, [0.9, 0.8, 0.7, 0.6])])
+    fake = FakeLLMClient({ClusterLabel: lambda _: label()})
+    first = detect_ideas(m, s, fake, **KW)[0]
+    m.set_idea_status(first.idea_id, "done")
+    m.upsert_note(
+        Note(
+            id="witcher-3@2026-02-01",
+            title="w",
+            body="b",
+            path="d.md",
+            hash="h",
+            work_id="witcher-3",
+        )
+    )
+    v = np.eye(8)[0]
+    s.add(m.add_chunks("witcher-3@2026-02-01", ["p"]), v.reshape(1, -1).astype(np.float32))
+    calls = len(fake.calls)
+    again = detect_ideas(m, s, fake, **KW)[0]
+    assert again.idea_id == first.idea_id and len(again.note_ids) == 5
+    assert again.status == "done" and again.title == first.title and len(fake.calls) == calls
+
+
+def test_theme_idea_spans_works(tmp_path):
+    hot = [("a0", 0, [0.9, 0.9]), ("a1", 0, [0.9, 0.8]), ("a2", 0, [0.8, 0.9])]
+    cold = [("b0", 1, [0.1, 0.1]), ("b1", 1, [0.1, 0.2]), ("b2", 1, [0.2, 0.1])]
+    m, s = build_works(tmp_path, hot + cold)
+    ideas = detect_ideas(m, s, FakeLLMClient({ClusterLabel: lambda _: label()}), **KW)
+    assert [(i.kind, i.work_ids) for i in ideas] == [("theme", ["a0", "a1", "a2"])]
+    assert ideas[0].idea_id == make_idea_id(["a0", "a1", "a2"])
+
+
+def test_single_work_cluster_is_not_a_theme(tmp_path):
+    m, s = build_works(tmp_path, [("w", 0, [0.9, 0.9, 0.9, 0.9])])
+    ideas = detect_ideas(m, s, FakeLLMClient({ClusterLabel: lambda _: label()}), **KW)
+    assert [i.kind for i in ideas] == ["work"]
+
+
+def test_work_label_prompt_mentions_single_work(tmp_path):
+    m, s = build_works(tmp_path, [("witcher-3", 0, [0.9, 0.8, 0.7, 0.6])])
+    fake = FakeLLMClient({ClusterLabel: lambda _: label()})
+    detect_ideas(m, s, fake, **KW)
+    assert "one work" in fake.calls[0][1]

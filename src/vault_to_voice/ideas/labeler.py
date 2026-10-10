@@ -12,13 +12,21 @@ LABEL_PROMPT = (
 )
 
 
+WORK_PROMPT = (
+    "These notes are all about one work (a single game, book or movie), written over time. "
+    "Propose one blog post about the author's experience with it, built on their opinions.\n"
+    "title: catchy, at most 10 words. angle: one sentence stating the argument the post makes. "
+    "theme: 2-4 words.\n\n"
+)
+
+
 class ClusterLabel(BaseModel):
     title: str
     angle: str
     theme: str
 
 
-def label_cluster(llm: LLMClient, rows: list[NoteRow]) -> ClusterLabel:
+def label_cluster(llm: LLMClient, rows: list[NoteRow], *, kind: str = "theme") -> ClusterLabel:
     parts = [
         wrap_note(
             r.note_id,
@@ -26,4 +34,5 @@ def label_cluster(llm: LLMClient, rows: list[NoteRow]) -> ClusterLabel:
         )
         for r in rows
     ]
-    return llm.structured(LABEL_PROMPT + "\n".join(parts), ClusterLabel, system=DATA_INSTRUCTION)
+    prompt = (WORK_PROMPT if kind == "work" else LABEL_PROMPT) + "\n".join(parts)
+    return llm.structured(prompt, ClusterLabel, system=DATA_INSTRUCTION)

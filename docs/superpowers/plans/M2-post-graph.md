@@ -230,7 +230,7 @@ and after the `style_profile_path` property:
 ```python
         self.conn = sqlite3.connect(str(path), check_same_thread=False)
 ```
-(LangGraph runs nodes in worker threads.) Append to `Manifest`:
+(LangGraph runs nodes in worker threads.) `get_idea` / `set_idea_status` below were already added in M1.5 Task 4 — keep them, only add their tests. For reference:
 ```python
     def get_idea(self, idea_id: str):
         from vault_to_voice.ideas.detector import Idea
