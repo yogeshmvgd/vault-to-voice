@@ -7,7 +7,7 @@ from vault_to_voice.ideas.opinion import OpinionScorer
 from vault_to_voice.index.chunking import split_paragraphs
 from vault_to_voice.index.embedder import Embedder
 from vault_to_voice.index.faiss_store import FaissStore
-from vault_to_voice.index.manifest import Manifest
+from vault_to_voice.index.manifest import SCHEMA_VERSION, Manifest
 from vault_to_voice.vault.reader import VaultReader
 
 log = structlog.get_logger()
@@ -37,13 +37,20 @@ def ingest(
     # "dirty" is set before any mutation and cleared after store.save(): catches crashes even
     # when the chunk count happens to match.
     out_of_sync = len(store) != manifest.chunk_count() or manifest.get_meta("dirty") == "1"
-    if manifest.get_meta("embedder") != signature or out_of_sync:
+    schema_changed = manifest.get_meta("schema") != SCHEMA_VERSION
+    if manifest.get_meta("embedder") != signature or out_of_sync or schema_changed:
         rebuilt = manifest.chunk_count() > 0 or len(store) > 0
         if rebuilt:
-            log.info("index_rebuild", signature=signature, out_of_sync=out_of_sync)
+            log.info(
+                "index_rebuild",
+                signature=signature,
+                out_of_sync=out_of_sync,
+                schema_changed=schema_changed,
+            )
         manifest.clear_index()
         store.reset()
         manifest.set_meta("embedder", signature)
+        manifest.set_meta("schema", SCHEMA_VERSION)
 
     manifest.set_meta("dirty", "1")
     diff = manifest.diff(notes)

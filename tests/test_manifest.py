@@ -63,3 +63,38 @@ def test_clear_index():
     m.add_chunks("a", ["x"])
     m.clear_index()
     assert m.notes() == [] and m.chunk_count() == 0
+
+
+def test_work_id_and_links_roundtrip():
+    m = Manifest(":memory:")
+    note = Note(
+        id="w@2026-10-10",
+        title="W",
+        type="game",
+        body="b",
+        path="Daily/x.md",
+        hash="h",
+        work_id="w",
+        links=("w", "v"),
+    )
+    m.upsert_note(note)
+    row = m.get_note("w@2026-10-10")
+    assert (row.work_id, row.links) == ("w", ["w", "v"])
+    assert m.notes()[0].work_id == "w"
+
+
+def test_old_database_gets_new_columns(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE notes (note_id TEXT PRIMARY KEY, path TEXT NOT NULL, title TEXT NOT NULL, "
+        "type TEXT NOT NULL, date TEXT, hash TEXT NOT NULL, opinion_score REAL, "
+        "highlights TEXT NOT NULL DEFAULT '[]')"
+    )
+    conn.execute("INSERT INTO notes VALUES ('a', 'a.md', 'A', 'game', NULL, 'h', 0.5, '[]')")
+    conn.commit()
+    conn.close()
+    row = Manifest(path).get_note("a")
+    assert (row.work_id, row.links) == (None, [])

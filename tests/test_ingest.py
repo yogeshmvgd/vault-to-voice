@@ -103,3 +103,15 @@ def test_dirty_flag_forces_rebuild_even_when_counts_match(tmp_path, vault_dir, w
     m.set_meta("dirty", "1")  # simulate crash after SQLite writes, before store.save()
     r = ingest(reader, m, s, HashEmbedder())
     assert r.rebuilt and m.get_meta("dirty") == "0"
+
+
+def test_schema_version_change_forces_rebuild(tmp_path, vault_dir, write_note):
+    from vault_to_voice.index.manifest import SCHEMA_VERSION
+
+    write_note("a.md", note_text("a", "x"))
+    reader, m, s = setup(tmp_path, vault_dir)
+    assert ingest(reader, m, s, HashEmbedder()).rebuilt is False
+    assert m.get_meta("schema") == SCHEMA_VERSION
+    m.set_meta("schema", "1")
+    r = ingest(reader, m, s, HashEmbedder())
+    assert r.rebuilt and r.new == 1 and m.get_meta("schema") == SCHEMA_VERSION

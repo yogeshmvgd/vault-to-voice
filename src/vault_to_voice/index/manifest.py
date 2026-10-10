@@ -6,10 +6,13 @@ from pathlib import Path
 
 from vault_to_voice.vault.models import Note
 
+SCHEMA_VERSION = "2"  # bump when the notes/chunks layout changes
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (
   note_id TEXT PRIMARY KEY, path TEXT NOT NULL, title TEXT NOT NULL, type TEXT NOT NULL,
-  date TEXT, hash TEXT NOT NULL, opinion_score REAL, highlights TEXT NOT NULL DEFAULT '[]'
+  date TEXT, hash TEXT NOT NULL, opinion_score REAL, highlights TEXT NOT NULL DEFAULT '[]',
+  work_id TEXT, links TEXT NOT NULL DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS chunks (
   chunk_id INTEGER PRIMARY KEY AUTOINCREMENT, note_id TEXT NOT NULL,
@@ -22,6 +25,8 @@ CREATE TABLE IF NOT EXISTS ideas (
 );
 """
 
+_NOTE_COLS = "note_id, path, title, type, date, hash, opinion_score, highlights, work_id, links"
+
 
 @dataclass(frozen=True)
 class NoteRow:
@@ -33,6 +38,8 @@ class NoteRow:
     hash: str
     opinion_score: float | None
     highlights: list[str]
+    work_id: str | None = None
+    links: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -57,6 +64,15 @@ class Manifest:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(path))
         self.conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(notes)")}
+        if "work_id" not in cols:
+            self.conn.execute("ALTER TABLE notes ADD COLUMN work_id TEXT")
+        if "links" not in cols:
+            self.conn.execute("ALTER TABLE notes ADD COLUMN links TEXT NOT NULL DEFAULT '[]'")
+        self.conn.commit()
 
     def close(self) -> None:
         self.conn.close()
@@ -79,11 +95,13 @@ class Manifest:
 
     def upsert_note(self, note: Note) -> None:
         self.conn.execute(
-            """INSERT INTO notes (note_id, path, title, type, date, hash, opinion_score, highlights)
-               VALUES (?, ?, ?, ?, ?, ?, NULL, '[]')
+            """INSERT INTO notes (note_id, path, title, type, date, hash, opinion_score,
+                                  highlights, work_id, links)
+               VALUES (?, ?, ?, ?, ?, ?, NULL, '[]', ?, ?)
                ON CONFLICT(note_id) DO UPDATE SET path=excluded.path, title=excluded.title,
                  type=excluded.type, date=excluded.date, hash=excluded.hash,
-                 opinion_score=NULL, highlights='[]'""",
+                 opinion_score=NULL, highlights='[]', work_id=excluded.work_id,
+                 links=excluded.links""",
             (
                 note.id,
                 note.path,
@@ -91,6 +109,8 @@ class Manifest:
                 note.type,
                 note.date.isoformat() if note.date else None,
                 note.hash,
+                note.work_id,
+                json.dumps(list(note.links)),
             ),
         )
         self.conn.commit()
@@ -144,19 +164,17 @@ class Manifest:
         return self.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
 
     def _row(self, r: tuple) -> NoteRow:
-        return NoteRow(*r[:7], highlights=json.loads(r[7]))
+        return NoteRow(
+            *r[:7], highlights=json.loads(r[7]), work_id=r[8], links=json.loads(r[9] or "[]")
+        )
 
     def notes(self) -> list[NoteRow]:
-        rows = self.conn.execute(
-            "SELECT note_id, path, title, type, date, hash, opinion_score, highlights "
-            "FROM notes ORDER BY note_id"
-        )
+        rows = self.conn.execute(f"SELECT {_NOTE_COLS} FROM notes ORDER BY note_id")
         return [self._row(r) for r in rows]
 
     def get_note(self, note_id: str) -> NoteRow | None:
         r = self.conn.execute(
-            "SELECT note_id, path, title, type, date, hash, opinion_score, highlights "
-            "FROM notes WHERE note_id = ?",
+            f"SELECT {_NOTE_COLS} FROM notes WHERE note_id = ?",
             (note_id,),
         ).fetchone()
         return self._row(r) if r else None

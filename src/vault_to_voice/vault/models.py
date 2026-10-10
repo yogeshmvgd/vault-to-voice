@@ -16,3 +16,5 @@ class Note(BaseModel):
     body: str
     path: str
     hash: str
+    work_id: str | None = None  # the game/book/movie this note is about (Obsidian format)
+    links: tuple[str, ...] = ()  # work_ids of every work linked in the note
