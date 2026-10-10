@@ -1,15 +1,15 @@
 # Progress
 
 ## Current
-- Session: S1 (M1a) — complete on branch `m1a-core-data` (Tasks 1–5, 32 tests green, ruff clean).
-- Next: **S2 — M1b** (Task 6 guardrails/LLM client onward) per `docs/superpowers/plans/M1-core-data.md`. Stay on branch `m1a-core-data` until M1 is done; whole-branch review + merge after S3.
+- Session: S2 (M1b) — complete on branch `m1a-core-data` (Tasks 6–10, 54 tests green + MiniLM integration test passed, ruff clean).
+- Next: **S3 — M1c** (Task 11 style statistics onward) per `docs/superpowers/plans/M1-core-data.md`. Stay on branch `m1a-core-data` until M1 is done; whole-branch review + merge after S3.
 
 ## Roadmap
 | # | Session | Driver | Status |
 |---|---|---|---|
 | S0 | git init, CLAUDE.md, PROGRESS.md, M1 plan | Claude | done |
 | S1 | M1a scaffold, config/guard, sample vault, reader, manifest | Claude | done |
-| S2 | M1b embedders, FAISS store, ingest, opinion scoring | Claude | todo |
+| S2 | M1b embedders, FAISS store, ingest, opinion scoring | Claude | done |
 | S3 | M1c style profile, idea detection, CLI | Claude | todo |
 | S4 | CI/CD lab 1 — GitHub Actions lint + tests | User (guided) | todo |
 | S5 | M2a graph state, context, interview, outline, checkpointer, Store | Claude | todo |
