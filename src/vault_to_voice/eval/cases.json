@@ -1,0 +1,53 @@
+[
+  {
+    "case_id": "fair-difficulty",
+    "title": "Hard but honest",
+    "angle": "Difficulty is fair when the game shows its rules before it punishes you.",
+    "theme": "difficulty",
+    "note_ids": [
+      "ashen-vigil@2026-03-02",
+      "ashen-vigil@2026-03-09",
+      "saltmarsh-knight@2026-04-04",
+      "hollow-crown@2026-02-11"
+    ],
+    "answers": [
+      "The tells. Every attack in Ashen Vigil warned me first.",
+      "Hollow Crown made me quit because the camera lost lock on.",
+      "Patience beats button mashing when the rules are honest."
+    ]
+  },
+  {
+    "case_id": "unreliable-narrators",
+    "title": "Why I trust liars on the page",
+    "angle": "An unreliable narrator works when every clue is fair and on the page.",
+    "theme": "unreliable narrators",
+    "note_ids": [
+      "the-lantern-keeper-s-lie@2026-01-19",
+      "the-lantern-keeper-s-lie@2026-04-11",
+      "notes-from-wick-street@2026-03-14",
+      "glass-orchard@2026-02-09"
+    ],
+    "answers": [
+      "The reveal landed because I could reread the clues.",
+      "Glass Orchard hid its twist instead of planting it.",
+      "Comedy makes a lying narrator easier to love."
+    ]
+  },
+  {
+    "case_id": "slow-cinema",
+    "title": "Learning to sit still",
+    "angle": "Long takes earn their length when they change how you look.",
+    "theme": "slow cinema",
+    "note_ids": [
+      "tidewater@2026-01-24",
+      "tidewater@2026-02-16",
+      "the-quiet-harvest@2026-03-07",
+      "seven-bells-at-dusk@2026-04-25"
+    ],
+    "answers": [
+      "The eleven-minute take in Tidewater rewired my patience.",
+      "Seven Bells at Dusk had long takes with nothing in them.",
+      "Now I notice where a cut tells me to look."
+    ]
+  }
+]

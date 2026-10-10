@@ -1,4 +1,5 @@
 import sys
+import tempfile
 from pathlib import Path
 
 import click
@@ -33,6 +34,7 @@ app = typer.Typer(
 )
 
 VaultOpt = typer.Option(None, "--vault", help="Vault path (overrides VAULT_PATH).")
+EvalOutOpt = typer.Option(None, "--out", help="Report path (default eval/report.json).")
 
 
 def _safe_console() -> None:
@@ -195,6 +197,40 @@ def write(idea_id: str = typer.Argument(..., help="Idea id from `v2v ideas`.")):
     while value is not None:
         value = run_until_interrupt(graph, config, Command(resume=_ask_user(value)))
     typer.echo(f"published: {graph.get_state(config).values['final_path']}")
+
+
+@app.command("eval")
+def eval_(
+    real: bool = typer.Option(
+        False, "--real", help="Use the configured LLM and embeddings (makes paid API calls)."
+    ),
+    out: Path | None = EvalOutOpt,
+):
+    """Mini eval: write posts for the sample-vault cases and score them (offline by default)."""
+    from vault_to_voice.eval.offline import OfflineLLM
+    from vault_to_voice.eval.run import DEFAULT_REPORT, run_eval, write_report
+    from vault_to_voice.index.embedder import HashEmbedder
+
+    if real:
+        s = _settings()
+        llm, embedder = make_llm(s), make_embedder(s)
+    else:
+        llm, embedder = OfflineLLM(), HashEmbedder(256)
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as workdir:
+        report = run_eval(llm, embedder, workdir=Path(workdir), mode="real" if real else "offline")
+    path = write_report(report, out or DEFAULT_REPORT)
+    for r in report.cases:
+        if r.error:
+            typer.echo(f"{r.case_id}: ERROR {r.error}")
+            continue
+        typer.echo(
+            f"{r.case_id}: coverage={r.citation_coverage} faithfulness={r.faithfulness} "
+            f"style={r.style_score} flags={r.flags} critic_notes={r.critic_notes}"
+        )
+    typer.echo("summary: " + " ".join(f"{k}={v}" for k, v in report.summary.items()))
+    typer.echo(f"report written to {path}")
+    if report.summary["errors"]:
+        raise typer.Exit(1)
 
 
 @app.command()

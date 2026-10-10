@@ -8,4 +8,5 @@ data/
 .ruff_cache/
 .mypy_cache/
 outbox/*
+eval/report.json
 !outbox/.gitkeep
