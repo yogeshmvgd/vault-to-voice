@@ -1,8 +1,8 @@
 # Progress
 
 ## Current
-- Session: S4 (CI lab 1) — complete. M1 merged to `main` (b50f628). Repo public at https://github.com/yogeshmvgd/vault-to-voice ; user-written `.github/workflows/ci.yml` (checkout → setup-uv py3.11 → `uv sync --locked` → ruff check → ruff format --check → pytest) is green; CI badge in README.
-- Next: **S5a — M1.5 Obsidian daily-notes format** (`docs/superpowers/plans/M1.5-obsidian-format.md`, 6 tasks), then **S5 — M2a** (`docs/superpowers/plans/M2-post-graph.md` Tasks 1–6). Branch `m2-post-graph`.
+- Session: S5a (M1.5 Obsidian daily-notes format) — complete on branch `m2-post-graph` (6 tasks + review fixes; 113 offline + 2 integration tests green, ruff clean). Not merged yet; M2 continues on the same branch.
+- Next: **S5 — M2a**: `docs/superpowers/plans/M2-post-graph.md` Tasks 1–6 (note: `get_idea`/`set_idea_status` already exist from M1.5).
 
 ## Roadmap
 | # | Session | Driver | Status |
@@ -12,7 +12,7 @@
 | S2 | M1b embedders, FAISS store, ingest, opinion scoring | Claude | done |
 | S3 | M1c style profile, idea detection, CLI | Claude | done |
 | S4 | CI/CD lab 1 — GitHub Actions lint + tests | User (guided) | done |
-| S5a | M1.5 Obsidian daily-notes reader, work/theme ideas, sample vault rewrite | Claude | todo |
+| S5a | M1.5 Obsidian daily-notes reader, work/theme ideas, sample vault rewrite | Claude | done |
 | S5 | M2a graph state, context, interview, outline, checkpointer, Store | Claude | todo |
 | S6 | M2b Send fan-out, citations, auto-revise, draft review, publish | Claude | todo |
 | S7 | M3 FastAPI + SSE, Streamlit, LangSmith | Claude | todo |
@@ -35,7 +35,10 @@
 - 2026-10-10: Real vault format = Obsidian daily notes `Daily/DD-MM-YYYY.md` with `## Games/Books/Movies` bullets linking `[[Work]]` pages; each linked bullet becomes a dated per-work Note; unlinked bullets skipped. Ideas: per-work (stable `idea_work_<id>`) + cross-work themes. Spec: `docs/superpowers/specs/2026-10-10-obsidian-daily-notes-design.md`.
 - 2026-10-10: M2 plan written (`docs/superpowers/plans/M2-post-graph.md`); critic deferred to M4; draft edit re-checks citations; CLI write = approve/revise only.
 
+- 2026-10-10: Theme ideas only when >= 6 works (real clustering); smaller vaults get work ideas only. Code fences and [[A^block]] links handled.
+
 ## Known issues
+- Deferred minors from M1.5 review: duplicate entry ids across Daily/ subfolders resolved by path order; inserting a same-work bullet above renumbers -N ids; block-quoted bullets ignored; task checkboxes `[ ]` leak into entry body; links inside inline code get rendered.
 - First CI install is slow (torch via sentence-transformers); possible later optimisation: CPU-only torch index.
 - Deferred minors from M1 review: unreadable files (OSError) abort ingest; rebuild wipes opinion scores (full LLM rescoring); empty notes skipped silently; scorer error mid-run not caught per note; KMeans ConvergenceWarning on identical vectors; sentence-transformers FutureWarning (`get_embedding_dimension`).
 - Git warns that LF will become CRLF on Windows. This is harmless; adding a `.gitattributes` later would make line endings explicit.
