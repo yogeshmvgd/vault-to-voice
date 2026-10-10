@@ -1,16 +1,16 @@
 # Progress
 
 ## Current
-- Session: S0 (planning) — complete.
-- Next: **S1 — M1a** (scaffold, config + vault guard, sample vault, vault reader, manifest) per `docs/superpowers/plans/M1-core-data.md`.
+- Session: S3 (M1c) — **M1 complete** on branch `m1a-core-data` (Tasks 1–15 + review fixes; 79 offline tests + 2 integration tests green, ruff clean). Not yet merged to `main`.
+- Next: merge decision for `m1a-core-data`, then **S4 — CI/CD lab 1** (GitHub Actions lint + tests; user types, Claude guides and reviews).
 
 ## Roadmap
 | # | Session | Driver | Status |
 |---|---|---|---|
 | S0 | git init, CLAUDE.md, PROGRESS.md, M1 plan | Claude | done |
-| S1 | M1a scaffold, config/guard, sample vault, reader, manifest | Claude | todo |
-| S2 | M1b embedders, FAISS store, ingest, opinion scoring | Claude | todo |
-| S3 | M1c style profile, idea detection, CLI | Claude | todo |
+| S1 | M1a scaffold, config/guard, sample vault, reader, manifest | Claude | done |
+| S2 | M1b embedders, FAISS store, ingest, opinion scoring | Claude | done |
+| S3 | M1c style profile, idea detection, CLI | Claude | done |
 | S4 | CI/CD lab 1 — GitHub Actions lint + tests | User (guided) | todo |
 | S5 | M2a graph state, context, interview, outline, checkpointer, Store | Claude | todo |
 | S6 | M2b Send fan-out, citations, auto-revise, draft review, publish | Claude | todo |
@@ -24,5 +24,11 @@
 - 2026-10-10: FAISS (not Chroma); embeddings switchable — MiniLM for dev, OpenAI for user runs.
 - 2026-10-10: CI/CD and Docker are guided labs, not generated.
 
+- 2026-10-10: Work on branch `m1a-core-data`; the final review runs once, after M1 (S3), not at the end of each session.
+- 2026-10-10: Added README.md stub (hatchling needs it) and .gitignore; `docs/**` is excluded from `ruff format`, which had been rewriting the code blocks in the plan.
+
+- 2026-10-10: M1 review fixes: duplicate-id fallback is unique; a `dirty` meta flag triggers crash rebuild; `v2v ideas` refuses an out-of-sync index; console uses backslashreplace.
+
 ## Known issues
-- none
+- Deferred minors from M1 review: unreadable files (OSError) abort ingest; rebuild wipes opinion scores (full LLM rescoring); empty notes skipped silently; scorer error mid-run not caught per note; KMeans ConvergenceWarning on identical vectors; sentence-transformers FutureWarning (`get_embedding_dimension`).
+- Git warns that LF will become CRLF on Windows. This is harmless; adding a `.gitattributes` later would make line endings explicit.
