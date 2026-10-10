@@ -10,6 +10,7 @@ from vault_to_voice.index.embedder import Embedder
 from vault_to_voice.index.faiss_store import FaissStore
 from vault_to_voice.index.manifest import Manifest
 from vault_to_voice.llm import LLMClient
+from vault_to_voice.publish import Publisher
 
 # Retry LLM-calling nodes on transient errors (exponential backoff, LangGraph defaults).
 LLM_RETRY = RetryPolicy(max_attempts=3)
@@ -25,4 +26,5 @@ class GraphDeps:
     embedder: Embedder
     settings: Settings
     store: BaseStore
+    publisher: Publisher | None = None
     today: Callable[[], dt.date] = field(default=dt.date.today)

@@ -12,6 +12,7 @@ from vault_to_voice.index.embedder import HashEmbedder
 from vault_to_voice.index.faiss_store import FaissStore
 from vault_to_voice.index.ingest import ingest
 from vault_to_voice.index.manifest import Manifest
+from vault_to_voice.publish import OutboxPublisher
 from vault_to_voice.vault.reader import FilesystemVaultReader
 
 Response = BaseModel | list[BaseModel] | Callable[[str], BaseModel]
@@ -64,6 +65,7 @@ def make_deps(tmp_path: Path, llm, *, dim: int = 256, **settings_overrides) -> G
         embedder=HashEmbedder(dim),
         settings=settings,
         store=InMemoryStore(),
+        publisher=OutboxPublisher(tmp_path / "outbox"),
     )
 
 
