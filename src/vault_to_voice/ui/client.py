@@ -23,8 +23,9 @@ class ApiClient:
         self.http = http
 
     @classmethod
-    def from_url(cls, base_url: str, *, timeout: float = 300.0) -> "ApiClient":
-        return cls(httpx.Client(base_url=base_url, timeout=timeout))
+    def from_url(cls, base_url: str, *, timeout: float = 1800.0) -> "ApiClient":
+        # Generous read timeout: setup actions on a local (Ollama) model can take many minutes.
+        return cls(httpx.Client(base_url=base_url, timeout=httpx.Timeout(timeout, connect=10.0)))
 
     @staticmethod
     def _check(response) -> None:
@@ -71,3 +72,16 @@ class ApiClient:
 
     def retry(self, thread_id: str) -> Iterator[Event]:
         return self._events("GET", f"/threads/{thread_id}/stream")
+
+    # ---- setup actions -------------------------------------------------------------------
+    def config(self) -> dict:
+        return self._json("GET", "/config")
+
+    def ingest(self, *, no_score: bool = False) -> dict:
+        return self._json("POST", "/ingest", json={"no_score": no_score})
+
+    def build_style(self) -> dict:
+        return self._json("POST", "/style")
+
+    def detect_ideas(self) -> list[dict]:
+        return self._json("POST", "/ideas/detect")

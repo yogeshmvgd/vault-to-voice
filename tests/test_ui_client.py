@@ -49,3 +49,26 @@ def test_from_url_builds_an_httpx_client():
     assert isinstance(api.http, httpx.Client) and str(api.http.base_url) == "http://127.0.0.1:9"
     with pytest.raises(httpx.ConnectError):
         api.health()  # nothing listens on port 9: the UI must show this, not crash
+
+
+def test_client_setup_actions(client):
+    api, _ = client
+    assert api.config()["vault_format"] == "flat"
+    assert api.ingest()["unchanged"] == 5
+    assert api.ingest(no_score=True)["scored"] == 0
+    assert api.build_style()["tone"] == ["wry"]
+    assert isinstance(api.detect_ideas(), list)
+
+
+def test_client_setup_conflict_raises_api_error(tmp_path, vault_dir):
+    service, _, _ = make_service(tmp_path, vault_dir)
+    api = ApiClient(TestClient(create_app(service)))
+    service.deps.manifest.set_meta("dirty", "1")
+    with pytest.raises(ApiError) as exc:
+        api.detect_ideas()
+    assert exc.value.status_code == 409 and "ingest" in exc.value.detail
+
+
+def test_from_url_has_generous_read_timeout():
+    api = ApiClient.from_url("http://127.0.0.1:1")
+    assert api.http.timeout.read >= 1800 and api.http.timeout.connect <= 30
