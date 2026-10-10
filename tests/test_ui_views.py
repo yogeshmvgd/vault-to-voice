@@ -65,3 +65,20 @@ def test_strip_frontmatter():
     assert views.strip_frontmatter("---\ntitle: x\n---\n\n# Post\n") == "# Post\n"
     assert views.strip_frontmatter("# No front\n") == "# No front\n"
     assert views.strip_frontmatter("---\nunterminated") == "---\nunterminated"
+
+
+def test_critic_markdown_puts_major_notes_first_and_escapes():
+    notes = [
+        {"section_id": "s1", "kind": "clarity", "severity": "minor", "note": "Name *it*."},
+        {"section_id": "s2", "kind": "voice", "severity": "major", "note": "Too formal."},
+    ]
+    out = views.critic_markdown(notes, {"s1": "Tells", "s2": "Learning"})
+    assert out.split("\n") == [
+        "- **major - voice** (Learning): Too formal.",
+        "- clarity (Tells): Name \\*it\\*.",
+    ]
+
+
+@pytest.mark.parametrize(("score", "label"), [(None, "n/a"), (0.734, "73%"), (1.0, "100%")])
+def test_style_label(score, label):
+    assert views.style_label(score) == label

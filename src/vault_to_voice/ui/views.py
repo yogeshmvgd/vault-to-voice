@@ -43,6 +43,22 @@ def flagged_markdown(draft: list[dict], flags: list[dict], headings: dict[str, s
     return "\n\n".join(parts)
 
 
+def critic_markdown(notes: list[dict], headings: dict[str, str]) -> str:
+    """Editor notes as a markdown list, major ones first and in bold."""
+    ordered = sorted(notes, key=lambda n: n["severity"] != "major")
+    lines = []
+    for n in ordered:
+        where = _md(headings.get(n["section_id"], n["section_id"]))
+        label = f"**{n['severity']} - {n['kind']}**" if n["severity"] == "major" else n["kind"]
+        lines.append(f"- {label} ({where}): {_md(n['note'])}")
+    return "\n".join(lines)
+
+
+def style_label(score: float | None) -> str:
+    """Style-match metric text: a percentage, or 'n/a' without a style profile."""
+    return "n/a" if score is None else f"{score:.0%}"
+
+
 def section_texts(draft: list[dict]) -> dict[str, str]:
     """Editable plain text per section: sentences joined by spaces, paragraphs by a blank line."""
     return {

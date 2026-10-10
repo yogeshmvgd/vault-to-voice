@@ -93,9 +93,15 @@ def draft_review(client: ApiClient, view: dict, pending: dict) -> None:
     sections = (view.get("outline") or {}).get("sections", [])
     headings = {s["id"]: s["heading"] for s in sections}
     st.subheader("Draft review")
-    coverage, flagged = st.columns(2)
+    coverage, flagged, style = st.columns(3)
     coverage.metric("Citation coverage", f"{pending['coverage']:.0%}")
     flagged.metric("Flagged sentences", len(flags))
+    style.metric("Style match", views.style_label(pending.get("style_score")))
+    for warning in pending.get("warnings", []):
+        st.warning(warning)
+    notes = pending.get("critic_notes", [])
+    if notes:
+        st.markdown("**Editor notes**\n\n" + views.critic_markdown(notes, headings))
     st.markdown(views.flagged_markdown(pending["draft"], flags, headings))
     tid = view["thread_id"]
     with st.expander("Edit sections"):

@@ -5,7 +5,10 @@ import pytest
 
 from tests.fakes import graph_responses, make_service, sse_events
 from vault_to_voice.api.service import Conflict, NotFound
-from vault_to_voice.graph.state import Outline
+from vault_to_voice.graph.memory import STYLE_KEY, STYLE_NS
+from vault_to_voice.graph.nodes.critic import CriticReview
+from vault_to_voice.graph.state import CriticNote, Outline
+from vault_to_voice.style.stats import compute_stats
 
 ANSWERS = ["The tells.", "Twenty deaths.", "Patience."]
 APPROVE = {"action": "approve"}
@@ -124,3 +127,21 @@ def test_malformed_review_decision_shows_the_review_again(tmp_path, vault_dir):
         last(service.resume(tid, answer))
     name, again = last(service.resume(tid, {"action": "publish-now"}))
     assert name == "interrupt" and again["type"] == "outline_review" and again["error"]
+
+
+def test_thread_view_shows_critic_results(tmp_path, vault_dir):
+    service, idea, fake = make_service(tmp_path, vault_dir)
+    style = {"stats": compute_stats(["I died. I learned. I won."]).model_dump(), "tone": {}}
+    service.deps.store.put(STYLE_NS, STYLE_KEY, style)
+    note = CriticNote(section_id="s1", kind="clarity", note="Name the boss.")
+    fake.responses[CriticReview] = lambda _: CriticReview(notes=[note])
+    tid = idea.idea_id
+    assert service.thread(tid).style_score is None  # nothing drafted yet
+    last(service.start(tid))
+    for answer in ANSWERS:
+        last(service.resume(tid, answer))
+    review = last(service.resume(tid, APPROVE))[1]
+    view = service.thread(tid)
+    assert view.style_score is not None and view.style_score == review["style_score"]
+    assert [n["note"] for n in view.critic_notes] == ["Name the boss."]
+    assert view.warnings == []

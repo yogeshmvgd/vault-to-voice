@@ -38,6 +38,9 @@ class ThreadView(BaseModel):
     outline: dict | None = None
     qa: list[dict] = []
     final_path: str | None = None
+    style_score: float | None = None  # latest critic run (None before the first draft)
+    critic_notes: list[dict] = []
+    warnings: list[str] = []  # input guardrail: instruction-like text found in the notes
 
 
 _NEEDS = {
@@ -116,6 +119,7 @@ class RunService:
         else:
             status = "stalled"
         outline = values.get("outline")
+        critic = values.get("critic_report")
         return ThreadView(
             thread_id=thread_id,
             title=idea.title,
@@ -124,6 +128,9 @@ class RunService:
             outline=outline.model_dump() if outline is not None else None,
             qa=[q.model_dump() for q in qa],
             final_path=values.get("final_path"),
+            style_score=critic.style_score if critic is not None else None,
+            critic_notes=[n.model_dump() for n in critic.notes] if critic is not None else [],
+            warnings=values.get("guard_warnings", []),
         )
 
     def list_threads(self) -> list[ThreadView]:
