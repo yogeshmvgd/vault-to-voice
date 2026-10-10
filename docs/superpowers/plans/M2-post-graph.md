@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-10-vault-to-voice-design.md` (sections [4] Post graph, Locked decisions: Checkpointer, Long-term memory, Citations, Approvals, Interview, Sessions, Output).
 
+**Prerequisite:** M1.5 (`docs/superpowers/plans/M1.5-obsidian-format.md`) is complete — notes carry `work_id`/`links`, ideas carry `kind`/`work_ids`. Test fixtures here use the flat format (still supported via `VAULT_FORMAT=flat`); the sample-vault integration test uses the Obsidian format.
+
 **Sessions:** Tasks 1–6 = S5 (M2a: state, context, interview, outline, checkpointer, Store) · Tasks 7–12 = S6 (M2b: Send fan-out, citations, auto-revise, draft review, publish, CLI). End each session per `CLAUDE.md` protocol. Work on branch `m2-post-graph`.
 
 **Deliberate deviations from spec (recorded, not silent):**
@@ -97,7 +99,7 @@ tests/
 - Produces:
   - `Settings` new fields: `interview_min_questions=3, interview_max_questions=5, max_review_rounds=3, citation_support=0.55, citation_reject=0.30, related_notes=2, related_min_score=0.5`; properties `checkpoint_path` (`data_dir/"checkpoints.db"`), `store_path` (`data_dir/"store.db"`).
   - `Manifest.get_idea(idea_id) -> Idea | None`, `Manifest.set_idea_status(idea_id, status) -> None` (raises `KeyError` if unknown). Manifest connection usable from other threads.
-  - `graph/state.py`: `SourceChunk(chunk_id:int, text:str)`; `NoteContext(note_id, title, type, date: str|None, highlights: list[str]=[], chunks: list[SourceChunk], related: bool=False)` + property `text`; `Question(question, grounding_note_ids=[])`; `QA(qa_id, question, answer, grounding_note_ids=[])`; `CoverageCheck(enough: bool, missing: str="")`; `Section(id, heading, point, planned_sources=[])`; `Outline(title, sections: list[Section] (min 1))`; `Sentence(text, sources=[], kind: "claim"|"connective"="claim")`; `Paragraph(sentences (min 1))`; `SectionText(paragraphs: list[Paragraph] (min 1))`; `SectionDraft(section_id, paragraphs)`; `Flag(section_id, paragraph:int, sentence:int, text, reason: "missing_source"|"invalid_source"|"unsupported", score: float|None=None)`; `CitationReport(n_claims, n_supported, flags=[])` + property `coverage`; `ReviewDecision(action: "approve"|"revise"|"edit", feedback="", edited: dict|None=None)`; `merge_drafts(left, right) -> dict`; `PostState` (TypedDict, total=False); `DraftTask` (TypedDict); `valid_sources(notes, qa) -> set[str]`.
+  - `graph/state.py`: `SourceChunk(chunk_id:int, text:str)`; `NoteContext(note_id, title, type, date: str|None, highlights: list[str]=[], chunks: list[SourceChunk], related: bool=False, work_id: str|None=None)` + property `text`; `Question(question, grounding_note_ids=[])`; `QA(qa_id, question, answer, grounding_note_ids=[])`; `CoverageCheck(enough: bool, missing: str="")`; `Section(id, heading, point, planned_sources=[])`; `Outline(title, sections: list[Section] (min 1))`; `Sentence(text, sources=[], kind: "claim"|"connective"="claim")`; `Paragraph(sentences (min 1))`; `SectionText(paragraphs: list[Paragraph] (min 1))`; `SectionDraft(section_id, paragraphs)`; `Flag(section_id, paragraph:int, sentence:int, text, reason: "missing_source"|"invalid_source"|"unsupported", score: float|None=None)`; `CitationReport(n_claims, n_supported, flags=[])` + property `coverage`; `ReviewDecision(action: "approve"|"revise"|"edit", feedback="", edited: dict|None=None)`; `merge_drafts(left, right) -> dict`; `PostState` (TypedDict, total=False); `DraftTask` (TypedDict); `valid_sources(notes, qa) -> set[str]`.
 
 - [ ] **Step 1: Add dependencies**
 
@@ -271,6 +273,7 @@ class NoteContext(BaseModel):
     highlights: list[str] = Field(default_factory=list)
     chunks: list[SourceChunk]
     related: bool = False  # pulled in by FAISS search, not part of the idea's cluster
+    work_id: str | None = None  # Obsidian format: the work this note is about
 
     @property
     def text(self) -> str:
@@ -584,7 +587,7 @@ git commit -m "feat: LangGraph Store memory and SQLite checkpointer factories"
 - Produces:
   - `GraphDeps(llm, manifest, index: FaissStore, embedder, settings, store: BaseStore, today: Callable[[], date] = date.today)` (dataclass); `LLM_RETRY = RetryPolicy(max_attempts=3)`.
   - `notes_block(notes: list[NoteContext]) -> str`, `qa_block(qa: list[QA]) -> str`, `style_brief(style: dict | None) -> str`.
-  - `load_context(state, deps) -> dict` with keys `notes, style, past_answers, qa, user_rounds, auto_revised`; raises `ValueError` mentioning `v2v ingest` when no idea note is indexed.
+  - `load_context(state, deps) -> dict` with keys `notes, style, past_answers, qa, user_rounds, auto_revised`; idea notes sorted by `(date or "", note_id)`, related notes appended after; raises `ValueError` mentioning `v2v ingest` when no idea note is indexed.
   - tests/fakes.py: `make_deps(tmp_path, llm, *, dim=256, **settings_overrides) -> GraphDeps`; `NOTES: dict[str, str]`; `seed_idea(deps, vault_dir, note_ids=("n0","n1","n2","n3")) -> Idea` (writes all `NOTES`, ingests them, saves the idea).
 
 - [ ] **Step 1: Write failing tests**
@@ -738,6 +741,23 @@ def test_no_notes_left_raises(tmp_path, vault_dir):
         load_context({"idea": idea}, deps)
 
 
+def test_notes_sorted_by_date_pages_first(tmp_path):
+    from vault_to_voice.ideas.detector import Idea
+    from vault_to_voice.vault.models import Note
+
+    deps = make_deps(tmp_path, FakeLLMClient({}))
+    for nid, date in [("w@2026-03-01", "2026-03-01"), ("w", None), ("w@2026-01-05", "2026-01-05")]:
+        deps.manifest.upsert_note(Note(id=nid, title="W", type="game", body="b", path="x.md",
+                                       hash="h", work_id="w",
+                                       date=None if date is None else date))
+        deps.manifest.add_chunks(nid, ["p"])
+    idea = Idea(idea_id="idea_work_w", title="t", angle="a", theme="x",
+                note_ids=["w", "w@2026-01-05", "w@2026-03-01"], opinion_score=0.5, kind="work")
+    out = load_context({"idea": idea}, deps)
+    assert core_ids(out) == ["w", "w@2026-01-05", "w@2026-03-01"]
+    assert out["notes"][0].work_id == "w"
+
+
 def test_style_and_past_answers_from_store(tmp_path, vault_dir):
     deps = make_deps(tmp_path, FakeLLMClient({}))
     idea = seed_idea(deps, vault_dir)
@@ -845,6 +865,8 @@ def load_context(state: PostState, deps: GraphDeps) -> dict:
             f"None of the notes for {idea.idea_id} are indexed any more. "
             "Run `v2v ingest` and `v2v ideas` again."
         )
+    # Chronological order (undated work pages first) so drafts can follow time.
+    notes.sort(key=lambda n: (n.date or "", n.note_id))
     related = _related_note_ids(deps, [n.note_id for n in notes])
     notes += _note_contexts(deps, related, related=True)
     return {
@@ -878,6 +900,7 @@ def _note_contexts(deps: GraphDeps, note_ids: list[str], *, related: bool) -> li
                 highlights=row.highlights,
                 chunks=chunks,
                 related=related,
+                work_id=row.work_id,
             )
         )
     return out
@@ -2318,6 +2341,8 @@ def test_publish_node(tmp_path, vault_dir):
     side = json.loads(path.with_suffix(".sources.json").read_text(encoding="utf-8"))
     assert side["paragraphs"][0]["sources"] == ["n0"] and side["citation_coverage"] == 1.0
     assert side["interview"][0]["answer"] == "a"
+    assert side["source_details"]["n0"] == {"title": "Note n0", "date": "2026-01-01",
+                                            "work_id": None}
     assert deps.manifest.get_idea(idea.idea_id).status == "done"
     assert [q.answer for q in past_answers(deps.store)] == ["a"]
 ```
@@ -2426,6 +2451,10 @@ def publish(state: PostState, deps: GraphDeps) -> dict:
             for p in section.paragraphs
         ],
         "interview": [q.model_dump() for q in qa],
+        "source_details": {
+            n.note_id: {"title": n.title, "date": n.date, "work_id": n.work_id}
+            for n in state["notes"]
+        },
     }
     post = RenderedPost(
         slug=slugify(outline.title) or idea.idea_id,
