@@ -26,6 +26,7 @@ def fake_llm():
 def env(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("EMBEDDING_PROVIDER", "hash")
+    monkeypatch.setenv("VAULT_FORMAT", "flat")
     monkeypatch.setenv("MIN_NOTES", "2")
     monkeypatch.setenv("MIN_OPINIONATED", "2")
     monkeypatch.setattr(cli, "make_llm", lambda settings: fake_llm())
@@ -56,7 +57,7 @@ def test_sample_vault_with_minilm_yields_ideas(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "make_llm", lambda settings: fake_llm())
     assert runner.invoke(cli.app, ["ingest"]).exit_code == 0
     r = runner.invoke(cli.app, ["ideas"])
-    assert r.exit_code == 0 and r.output.count("idea_") >= 2, r.output
+    assert r.exit_code == 0 and "[work]" in r.output and "[theme]" in r.output, r.output
 
 
 def test_safe_console_survives_cp1252(monkeypatch):
@@ -79,3 +80,21 @@ def test_ideas_before_ingest_in_sync_message(env):
     m.close()
     r = runner.invoke(cli.app, ["ideas"])
     assert r.exit_code == 1 and "v2v ingest" in r.output
+
+
+def test_ingest_obsidian_vault_reports_entries(env, monkeypatch, vault_dir, write_note):
+    monkeypatch.setenv("VAULT_FORMAT", "obsidian")
+    write_note("Daily/10-10-2026.md", "## Games\n- Played [[Hades]], loved it.\n- Too tired.\n")
+    write_note("Games/Hades.md", "Best roguelike dialogue I know.\n")
+    r = runner.invoke(cli.app, ["ingest", "--vault", str(vault_dir)])
+    assert r.exit_code == 0, r.output
+    assert "new=2" in r.output
+    assert "daily=1 entries=1 pages=1 unlinked_skipped=1 empty_skipped=0" in r.output
+
+
+def test_ideas_show_kind(env, vault_dir, write_note):
+    for i in range(6):
+        write_note(f"n{i}.md", note_text(f"n{i}", f"boss fight fair difficulty note {i}"))
+    runner.invoke(cli.app, ["ingest", "--vault", str(vault_dir)])
+    r = runner.invoke(cli.app, ["ideas"])
+    assert r.exit_code == 0 and "[theme]" in r.output

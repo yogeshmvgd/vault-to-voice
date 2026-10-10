@@ -13,7 +13,7 @@ from vault_to_voice.index.ingest import ingest as run_ingest
 from vault_to_voice.index.manifest import Manifest
 from vault_to_voice.llm import LangChainLLMClient, LLMClient
 from vault_to_voice.style.profile import build_style_profile, save_profile
-from vault_to_voice.vault.reader import FilesystemVaultReader
+from vault_to_voice.vault.factory import make_reader
 
 app = typer.Typer(
     help="vault-to-voice: turn your notes into posts in your own voice.", no_args_is_help=True
@@ -57,8 +57,9 @@ def ingest(
     s = _settings(vault)
     embedder = make_embedder(s)
     scorer = None if no_score else OpinionScorer(make_llm(s))
+    reader = make_reader(s)
     r = run_ingest(
-        FilesystemVaultReader(s.vault_path),
+        reader,
         Manifest(s.manifest_path),
         FaissStore(s.faiss_path, embedder.dim),
         embedder,
@@ -68,13 +69,19 @@ def ingest(
         f"new={r.new} changed={r.changed} deleted={r.deleted} "
         f"unchanged={r.unchanged} rebuilt={r.rebuilt} scored={r.scored}"
     )
+    stats = getattr(reader, "stats", None)
+    if stats is not None:
+        typer.echo(
+            f"daily={stats.daily_files} entries={stats.entries} pages={stats.pages} "
+            f"unlinked_skipped={stats.unlinked_skipped} empty_skipped={stats.empty_skipped}"
+        )
 
 
 @app.command()
 def style(vault: Path | None = VaultOpt):
     """Build the style profile (stats + LLM tone) from your notes."""
     s = _settings(vault)
-    notes = list(FilesystemVaultReader(s.vault_path).iter_notes())
+    notes = list(make_reader(s).iter_notes())
     if not notes:
         typer.echo("no notes found")
         raise typer.Exit(1)
@@ -107,6 +114,6 @@ def ideas():
         typer.echo("no ideas yet")
     for idea in found:
         typer.echo(
-            f"{idea.idea_id}  {idea.title}  "
+            f"{idea.idea_id}  [{idea.kind}] {idea.title}  "
             f"({len(idea.note_ids)} notes, opinion {idea.opinion_score})"
         )
