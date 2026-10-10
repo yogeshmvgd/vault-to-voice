@@ -1,8 +1,8 @@
 # Progress
 
 ## Current
-- Session: S5 (M2a, plan Tasks 1-6) — complete on branch `m2-post-graph`: graph state models, Store memory + SQLite checkpointer, load_context, interview subgraph, outline + review, resumable post graph through outline review. 155 offline tests green, ruff clean.
-- Next: **S6 — M2b**: `docs/superpowers/plans/M2-post-graph.md` Task 7 onward.
+- Session: S6 (M2b, plan Tasks 7-12) — complete on branch `m2-post-graph`: Send fan-out section drafting, citation checker (similarity thresholds + batched LLM judge), one-shot auto-revise, human draft review (approve/revise/edit), outbox publisher with sources sidecar, full post graph, `v2v write` resumable CLI. 190 offline tests green (3 integration deselected), ruff clean. M2 done.
+- Next: **S7 — M3**: FastAPI + SSE, Streamlit, LangSmith (plan to be written).
 
 ## Roadmap
 | # | Session | Driver | Status |
@@ -14,7 +14,7 @@
 | S4 | CI/CD lab 1 — GitHub Actions lint + tests | User (guided) | done |
 | S5a | M1.5 Obsidian daily-notes reader, work/theme ideas, sample vault rewrite | Claude | done |
 | S5 | M2a graph state, context, interview, outline, checkpointer, Store | Claude | done |
-| S6 | M2b Send fan-out, citations, auto-revise, draft review, publish | Claude | todo |
+| S6 | M2b Send fan-out, citations, auto-revise, draft review, publish | Claude | done |
 | S7 | M3 FastAPI + SSE, Streamlit, LangSmith | Claude | todo |
 | S8 | M4 critic, guardrails, mini eval | Claude | todo |
 | S9 | Docker lab — Dockerfile + compose | User (guided) | todo |
@@ -39,8 +39,11 @@
 
 - 2026-10-10: S5: plan's test-fixture imports in tests/fakes.py moved to the top of the file (ruff E402).
 
+- 2026-10-10: S6: plan code applied as written; only deviation: the Task 11 fixture imports appended to tests/fakes.py were placed at the top of the file (ruff E402).
+
 ## Known issues
 - Deferred minors from M1.5 review: duplicate entry ids across Daily/ subfolders resolved by path order; inserting a same-work bullet above renumbers -N ids; block-quoted bullets ignored; task checkboxes `[ ]` leak into entry body; links inside inline code get rendered.
 - First CI install is slow (torch via sentence-transformers); possible later optimisation: CPU-only torch index.
 - Deferred minors from M1 review: unreadable files (OSError) abort ingest; rebuild wipes opinion scores (full LLM rescoring); empty notes skipped silently; scorer error mid-run not caught per note; KMeans ConvergenceWarning on identical vectors; sentence-transformers FutureWarning (`get_embedding_dimension`).
 - Git warns that LF will become CRLF on Windows. This is harmless; adding a `.gitattributes` later would make line endings explicit.
+- M2 integration test `test_write_on_sample_vault_with_minilm` written but not run in S6 (needs MiniLM download); manual `v2v write` smoke with a real OpenAI key still pending.
