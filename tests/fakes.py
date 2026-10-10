@@ -1,10 +1,11 @@
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
 from langgraph.store.memory import InMemoryStore
 from pydantic import BaseModel
 
+from vault_to_voice.api.events import parse_sse
 from vault_to_voice.config import Settings
 from vault_to_voice.graph.deps import GraphDeps
 from vault_to_voice.graph.state import (
@@ -131,3 +132,8 @@ def graph_responses(section_fn=good_section) -> dict:
         ),
         SectionText: section_fn,
     }
+
+
+def sse_events(frames: Iterable[str]) -> list[tuple[str, Any]]:
+    """Parse SSE frames (strings, as yielded by the API layer) into (event, data) pairs."""
+    return list(parse_sse("".join(frames).split("\n")))
