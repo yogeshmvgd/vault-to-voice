@@ -14,7 +14,11 @@ def test_parses_frontmatter(vault_dir, write_note):
     write_note("games/a.md", note_text("a1", "Loved it.", title="Alpha"))
     n = read(vault_dir)["a1"]
     assert (n.title, n.type, n.date, n.body, n.path) == (
-        "Alpha", "game", dt.date(2026, 1, 1), "Loved it.", "games/a.md"
+        "Alpha",
+        "game",
+        dt.date(2026, 1, 1),
+        "Loved it.",
+        "games/a.md",
     )
 
 

@@ -51,8 +51,13 @@ class FilesystemVaultReader:
                 continue
             if note.id in seen:
                 new_id = slugify(rel.with_suffix("").as_posix())
-                log.warning("duplicate_note_id", id=note.id, first=seen[note.id],
-                            second=rel.as_posix(), using=new_id)
+                log.warning(
+                    "duplicate_note_id",
+                    id=note.id,
+                    first=seen[note.id],
+                    second=rel.as_posix(),
+                    using=new_id,
+                )
                 note = note.model_copy(update={"id": new_id})
             seen[note.id] = rel.as_posix()
             yield note
