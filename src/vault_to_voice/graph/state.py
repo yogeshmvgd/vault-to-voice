@@ -94,6 +94,23 @@ class CitationReport(BaseModel):
         return round(self.n_supported / self.n_claims, 3) if self.n_claims else 1.0
 
 
+class CriticNote(BaseModel):
+    section_id: str
+    kind: Literal["voice", "substance", "clarity", "safety"]
+    severity: Literal["minor", "major"] = "minor"
+    note: str
+
+
+class CriticReport(BaseModel):
+    style_score: float | None = None  # 0-1 match with the style profile; None = no profile
+    style_ok: bool = True  # style_score >= Settings.critic_min_style (or no profile)
+    notes: list[CriticNote] = Field(default_factory=list)
+
+    @property
+    def needs_revision(self) -> bool:
+        return not self.style_ok or any(n.severity == "major" for n in self.notes)
+
+
 class ReviewDecision(BaseModel):
     action: Literal["approve", "revise", "edit"]
     feedback: str = ""
@@ -122,6 +139,8 @@ class PostState(TypedDict, total=False):
     drafts: Annotated[dict[str, SectionDraft], merge_drafts]
     draft: list[SectionDraft]
     citation_report: CitationReport
+    critic_report: CriticReport
+    guard_warnings: list[str]
     auto_revised: bool
     user_rounds: dict[str, int]
     final_path: str | None

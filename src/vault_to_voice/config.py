@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     max_review_rounds: int = 3
     citation_support: float = 0.55
     citation_reject: float = 0.30
+    critic_min_style: float = 0.5
     related_notes: int = 2
     related_min_score: float = 0.5
     vault_format: Literal["obsidian", "flat"] = "obsidian"

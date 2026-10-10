@@ -26,6 +26,8 @@ CHECKPOINT_TYPES: tuple[type, ...] = (
     s.SectionDraft,
     s.Flag,
     s.CitationReport,
+    s.CriticNote,
+    s.CriticReport,
 )
 
 
