@@ -11,23 +11,19 @@ from vault_to_voice.config import Settings, export_provider_keys
 from vault_to_voice.graph.builder import build_post_graph
 from vault_to_voice.graph.checkpoint import make_checkpointer, make_store
 from vault_to_voice.graph.deps import GraphDeps
-from vault_to_voice.graph.memory import put_style
 from vault_to_voice.graph.runner import (
     pending_interrupt,
     run_until_interrupt,
     start_input,
     thread_config,
 )
-from vault_to_voice.ideas.detector import IndexOutOfSyncError, detect_ideas
-from vault_to_voice.ideas.opinion import OpinionScorer
+from vault_to_voice.ideas.detector import IndexOutOfSyncError
 from vault_to_voice.index.embedder import make_embedder
 from vault_to_voice.index.faiss_store import FaissStore
-from vault_to_voice.index.ingest import ingest as run_ingest
 from vault_to_voice.index.manifest import Manifest
 from vault_to_voice.llm import LangChainLLMClient, LLMClient
 from vault_to_voice.publish import OutboxPublisher
-from vault_to_voice.style.profile import build_style_profile, save_profile
-from vault_to_voice.vault.factory import make_reader
+from vault_to_voice.setup_actions import NoNotesError, build_style, find_ideas, ingest_vault
 
 app = typer.Typer(
     help="vault-to-voice: turn your notes into posts in your own voice.", no_args_is_help=True
@@ -73,20 +69,19 @@ def ingest(
     """Index new/changed notes into FAISS and score them for opinion."""
     s = _settings(vault)
     embedder = make_embedder(s)
-    scorer = None if no_score else OpinionScorer(make_llm(s))
-    reader = make_reader(s)
-    r = run_ingest(
-        reader,
+    result = ingest_vault(
+        s,
         Manifest(s.manifest_path),
         FaissStore(s.faiss_path, embedder.dim),
         embedder,
-        scorer,
+        None if no_score else make_llm(s),
     )
+    r = result.report
     typer.echo(
         f"new={r.new} changed={r.changed} deleted={r.deleted} "
         f"unchanged={r.unchanged} rebuilt={r.rebuilt} scored={r.scored}"
     )
-    stats = getattr(reader, "stats", None)
+    stats = result.stats
     if stats is not None:
         typer.echo(
             f"daily={stats.daily_files} entries={stats.entries} pages={stats.pages} "
@@ -98,14 +93,11 @@ def ingest(
 def style(vault: Path | None = VaultOpt):
     """Build the style profile (stats + LLM tone) from your notes."""
     s = _settings(vault)
-    notes = list(make_reader(s).iter_notes())
-    if not notes:
-        typer.echo("no notes found")
-        raise typer.Exit(1)
-    profile = save_profile(
-        build_style_profile(notes, make_llm(s), seed=s.seed), s.style_profile_path
-    )
-    put_style(make_store(s.store_path), profile)
+    try:
+        profile = build_style(s, make_llm(s), make_store(s.store_path))
+    except NoNotesError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(1) from exc
     typer.echo(f"style profile v{profile.version} saved to {s.style_profile_path}")
     typer.echo(f"tone: {', '.join(profile.tone.tone)}")
 
@@ -116,14 +108,8 @@ def ideas():
     s = _settings()
     embedder = make_embedder(s)
     try:
-        found = detect_ideas(
-            Manifest(s.manifest_path),
-            FaissStore(s.faiss_path, embedder.dim),
-            make_llm(s),
-            min_notes=s.min_notes,
-            min_opinionated=s.min_opinionated,
-            opinion_threshold=s.opinion_threshold,
-            seed=s.seed,
+        found = find_ideas(
+            s, Manifest(s.manifest_path), FaissStore(s.faiss_path, embedder.dim), make_llm(s)
         )
     except IndexOutOfSyncError as exc:
         typer.echo(str(exc))
