@@ -1,8 +1,8 @@
 # Progress
 
 ## Current
-- Session: S3 (M1c) — **M1 complete** on branch `m1a-core-data` (Tasks 1–15 + review fixes; 79 offline tests + 2 integration tests green, ruff clean). Not yet merged to `main`.
-- Next: merge decision for `m1a-core-data`, then **S4 — CI/CD lab 1** (GitHub Actions lint + tests; user types, Claude guides and reviews).
+- Session: S4 (CI lab 1) — complete. M1 merged to `main` (b50f628). Repo public at https://github.com/yogeshmvgd/vault-to-voice ; user-written `.github/workflows/ci.yml` (checkout → setup-uv py3.11 → `uv sync --locked` → ruff check → ruff format --check → pytest) is green; CI badge in README.
+- Next: **S5 — M2a** (graph state, context, interview, outline, checkpointer, Store). Needs a new plan: `docs/superpowers/plans/M2-*.md` written from the spec before coding.
 
 ## Roadmap
 | # | Session | Driver | Status |
@@ -11,7 +11,7 @@
 | S1 | M1a scaffold, config/guard, sample vault, reader, manifest | Claude | done |
 | S2 | M1b embedders, FAISS store, ingest, opinion scoring | Claude | done |
 | S3 | M1c style profile, idea detection, CLI | Claude | done |
-| S4 | CI/CD lab 1 — GitHub Actions lint + tests | User (guided) | todo |
+| S4 | CI/CD lab 1 — GitHub Actions lint + tests | User (guided) | done |
 | S5 | M2a graph state, context, interview, outline, checkpointer, Store | Claude | todo |
 | S6 | M2b Send fan-out, citations, auto-revise, draft review, publish | Claude | todo |
 | S7 | M3 FastAPI + SSE, Streamlit, LangSmith | Claude | todo |
@@ -29,6 +29,9 @@
 
 - 2026-10-10: M1 review fixes: duplicate-id fallback is unique; a `dirty` meta flag triggers crash rebuild; `v2v ideas` refuses an out-of-sync index; console uses backslashreplace.
 
+- 2026-10-10: CI tests on Python 3.11 (oldest supported); local dev happened to use 3.14. User is a fresher on CI/Docker — labs teach from zero (commands, YAML, git auth).
+
 ## Known issues
+- First CI install is slow (torch via sentence-transformers); possible later optimisation: CPU-only torch index.
 - Deferred minors from M1 review: unreadable files (OSError) abort ingest; rebuild wipes opinion scores (full LLM rescoring); empty notes skipped silently; scorer error mid-run not caught per note; KMeans ConvergenceWarning on identical vectors; sentence-transformers FutureWarning (`get_embedding_dimension`).
 - Git warns that LF will become CRLF on Windows. This is harmless; adding a `.gitattributes` later would make line endings explicit.
