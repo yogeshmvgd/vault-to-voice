@@ -2,7 +2,13 @@ from vault_to_voice.ideas.detector import Idea
 
 
 def thread_config(thread_id: str) -> dict:
-    return {"configurable": {"thread_id": thread_id}}
+    """Run config for one post thread; run_name/tags/metadata label its LangSmith traces."""
+    return {
+        "configurable": {"thread_id": thread_id},
+        "run_name": "post_graph",
+        "tags": ["vault-to-voice", "post-graph"],
+        "metadata": {"idea_id": thread_id},
+    }
 
 
 def start_input(idea: Idea) -> dict:

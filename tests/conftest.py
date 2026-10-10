@@ -3,6 +3,14 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _no_langsmith(monkeypatch):
+    """Tracing is opt-in: tests never send traces, even from a shell that enables them."""
+    monkeypatch.setenv("LANGSMITH_TRACING", "false")
+    for name in ("LANGSMITH_API_KEY", "LANGCHAIN_TRACING_V2", "LANGCHAIN_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def vault_dir(tmp_path) -> Path:
     d = tmp_path / "vault"

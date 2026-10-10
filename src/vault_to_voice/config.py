@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     daily_folder: str = "Daily"
     daily_date_format: str = "%d-%m-%Y"
     category_headings: str = "games=game,books=book,movies=movie"
+    api_host: str = "127.0.0.1"
+    api_port: int = 8000
+    langsmith_tracing: bool = False
+    langsmith_api_key: str = ""
+    langsmith_project: str = "vault-to-voice"
 
     @property
     def categories(self) -> dict[str, str]:

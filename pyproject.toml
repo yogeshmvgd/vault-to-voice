@@ -20,6 +20,10 @@ dependencies = [
   "structlog>=24.1",
   "langgraph>=1.2",
   "langgraph-checkpoint-sqlite>=3.1",
+  "fastapi>=0.143.0",
+  "uvicorn>=0.54.0",
+  "streamlit>=1.65.0",
+  "httpx>=0.28.1",
 ]
 
 [project.optional-dependencies]
