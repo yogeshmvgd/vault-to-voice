@@ -19,8 +19,9 @@ def test_layout():
     assert len(daily) >= 20
     for p in daily:
         dt.datetime.strptime(p.stem, "%d-%m-%Y")
-    pages = [p for folder in ("Games", "Books", "Movies")
-             for p in (SAMPLE_VAULT / folder).glob("*.md")]
+    pages = [
+        p for folder in ("Games", "Books", "Movies") for p in (SAMPLE_VAULT / folder).glob("*.md")
+    ]
     assert len(pages) >= 12
 
 
