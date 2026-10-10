@@ -1,8 +1,8 @@
 # Progress
 
 ## Current
-- Session: S5a (M1.5 Obsidian daily-notes format) — complete on branch `m2-post-graph` (6 tasks + review fixes; 113 offline + 2 integration tests green, ruff clean). Not merged yet; M2 continues on the same branch.
-- Next: **S5 — M2a**: `docs/superpowers/plans/M2-post-graph.md` Tasks 1–6 (note: `get_idea`/`set_idea_status` already exist from M1.5).
+- Session: S5 (M2a, plan Tasks 1-6) — complete on branch `m2-post-graph`: graph state models, Store memory + SQLite checkpointer, load_context, interview subgraph, outline + review, resumable post graph through outline review. 155 offline tests green, ruff clean.
+- Next: **S6 — M2b**: `docs/superpowers/plans/M2-post-graph.md` Task 7 onward.
 
 ## Roadmap
 | # | Session | Driver | Status |
@@ -13,7 +13,7 @@
 | S3 | M1c style profile, idea detection, CLI | Claude | done |
 | S4 | CI/CD lab 1 — GitHub Actions lint + tests | User (guided) | done |
 | S5a | M1.5 Obsidian daily-notes reader, work/theme ideas, sample vault rewrite | Claude | done |
-| S5 | M2a graph state, context, interview, outline, checkpointer, Store | Claude | todo |
+| S5 | M2a graph state, context, interview, outline, checkpointer, Store | Claude | done |
 | S6 | M2b Send fan-out, citations, auto-revise, draft review, publish | Claude | todo |
 | S7 | M3 FastAPI + SSE, Streamlit, LangSmith | Claude | todo |
 | S8 | M4 critic, guardrails, mini eval | Claude | todo |
@@ -36,6 +36,8 @@
 - 2026-10-10: M2 plan written (`docs/superpowers/plans/M2-post-graph.md`); critic deferred to M4; draft edit re-checks citations; CLI write = approve/revise only.
 
 - 2026-10-10: Theme ideas only when >= 6 works (real clustering); smaller vaults get work ideas only. Code fences and [[A^block]] links handled.
+
+- 2026-10-10: S5: plan's test-fixture imports in tests/fakes.py moved to the top of the file (ruff E402).
 
 ## Known issues
 - Deferred minors from M1.5 review: duplicate entry ids across Daily/ subfolders resolved by path order; inserting a same-work bullet above renumbers -N ids; block-quoted bullets ignored; task checkboxes `[ ]` leak into entry body; links inside inline code get rendered.
