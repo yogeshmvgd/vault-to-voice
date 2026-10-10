@@ -30,3 +30,8 @@ def test_render_links():
 def test_work_id_for():
     assert work_id_for("Witcher 3") == work_id_for("witcher 3") == "witcher-3"
     assert work_id_for("日本").startswith("work-")
+
+
+def test_block_reference_is_same_work():
+    assert parse_link("Hades^abc") == ("Hades", "Hades")
+    assert parse_link("Hades#^abc|H") == ("Hades", "H")

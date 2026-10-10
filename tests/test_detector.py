@@ -79,7 +79,7 @@ def test_empty_and_tiny_vaults(tmp_path):
 
 
 def test_label_prompt_wraps_notes(tmp_path):
-    m, s = build(tmp_path, [[0.9, 0.8, 0.7, 0.6]])
+    m, s = build(tmp_path, [[0.9, 0.8, 0.7, 0.6], [0.1, 0.1, 0.1, 0.1]])
     fake = FakeLLMClient({ClusterLabel: lambda _: label()})
     detect_ideas(m, s, fake, **KW)
     prompt = fake.calls[0][1]
@@ -167,3 +167,10 @@ def test_work_label_prompt_mentions_single_work(tmp_path):
     fake = FakeLLMClient({ClusterLabel: lambda _: label()})
     detect_ideas(m, s, fake, **KW)
     assert "one work" in fake.calls[0][1]
+
+
+def test_no_theme_ideas_without_real_clustering(tmp_path):
+    # 4 works (< 6) cannot be split into >= 2 clusters, so no catch-all theme idea
+    works = [(f"w{i}", 0, [0.9, 0.9]) for i in range(4)]
+    m, s = build_works(tmp_path, works)
+    assert detect_ideas(m, s, FakeLLMClient({}), **KW) == []

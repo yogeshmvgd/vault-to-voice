@@ -150,3 +150,13 @@ def test_bad_yaml_and_hidden_dirs_skipped(vault_dir, write_note):
 def test_missing_root_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         list(ObsidianVaultReader(tmp_path / "nope").iter_notes())
+
+
+def test_code_fence_lines_are_not_headings(vault_dir, write_note):
+    text = (
+        "## Games\n- [[Hades]] loved it\n```\n# not a heading\n```\n- [[Celeste]] hard but fair\n"
+    )
+    write_note("Daily/10-10-2026.md", text)
+    notes, _ = read(vault_dir)
+    assert set(notes) == {"hades@2026-10-10", "celeste@2026-10-10"}
+    assert "# not a heading" in notes["hades@2026-10-10"].body

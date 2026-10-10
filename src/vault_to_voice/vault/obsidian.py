@@ -36,12 +36,22 @@ def split_entries(body: str, categories: dict[str, str]) -> list[tuple[str, str]
     current: str | None = None
     buf: list[str] | None = None
     blank_seen = False
+    in_fence = False
 
     def flush() -> None:
         if buf is not None and current is not None:
             entries.append((current, "\n".join(buf).strip()))
 
     for line in body.splitlines():
+        if line.strip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+            if buf is not None:
+                buf.append(line.strip())
+            continue
+        if in_fence:  # code inside a fence: never a heading or bullet
+            if buf is not None:
+                buf.append(line.strip())
+            continue
         heading = _HEADING.match(line)
         if heading:
             flush()

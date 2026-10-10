@@ -95,6 +95,9 @@ def detect_ideas(
             ideas.append(make(work_idea_id(work), "work", [work], members))
 
     works = sorted(groups)
+    if len(works) // 3 < 2:  # too few works to split into >= 2 clusters: no catch-all theme
+        manifest.save_ideas(ideas)
+        return ideas
     work_vectors = np.vstack([np.mean([vector_of[n] for n in groups[w]], axis=0) for w in works])
     norms = np.linalg.norm(work_vectors, axis=1, keepdims=True)
     work_vectors = work_vectors / np.where(norms == 0, 1.0, norms)

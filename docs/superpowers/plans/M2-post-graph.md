@@ -2747,6 +2747,8 @@ def _ready_idea(vault_dir, write_note):
 
     for nid, body in NOTES.items():
         write_note(f"{nid}.md", note_text(nid, body))
+    # theme ideas need >= 6 works (one per flat note) so clustering can split them
+    write_note("x1.md", note_text("x1", "Fair boss fights reward patience and honest rules."))
     assert runner.invoke(cli.app, ["ingest", "--vault", str(vault_dir)]).exit_code == 0
     assert runner.invoke(cli.app, ["ideas"]).exit_code == 0
     return Manifest(Settings().manifest_path).list_ideas()[0].idea_id

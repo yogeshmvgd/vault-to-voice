@@ -10,7 +10,7 @@ INLINE_CODE = re.compile(r"`[^`\n]*`")
 def parse_link(inner: str) -> tuple[str, str]:
     """'Folder/Target#heading|alias' -> ('Target', 'alias' or 'Target')."""
     target_part, _, alias = inner.partition("|")
-    target = target_part.split("#", 1)[0].strip().rsplit("/", 1)[-1].strip()
+    target = re.split(r"[#^]", target_part, maxsplit=1)[0].strip().rsplit("/", 1)[-1].strip()
     if target.lower().endswith(".md"):
         target = target[:-3]
     return target, alias.strip() or target
