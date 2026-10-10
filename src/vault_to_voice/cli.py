@@ -195,3 +195,20 @@ def write(idea_id: str = typer.Argument(..., help="Idea id from `v2v ideas`.")):
     while value is not None:
         value = run_until_interrupt(graph, config, Command(resume=_ask_user(value)))
     typer.echo(f"published: {graph.get_state(config).values['final_path']}")
+
+
+@app.command()
+def serve(
+    host: str | None = typer.Option(None, help="Bind address (default API_HOST)."),
+    port: int | None = typer.Option(None, help="Port (default API_PORT)."),
+):
+    """Run the HTTP API (FastAPI + SSE) that the Streamlit UI talks to."""
+    import uvicorn
+
+    from vault_to_voice.api.app import create_app
+    from vault_to_voice.api.factory import build_service
+    from vault_to_voice.observability import configure_tracing
+
+    s = _settings()
+    service = build_service(s, make_llm(s), tracing=configure_tracing(s))
+    uvicorn.run(create_app(service), host=host or s.api_host, port=port or s.api_port)
