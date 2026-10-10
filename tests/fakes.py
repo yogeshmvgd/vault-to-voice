@@ -1,11 +1,14 @@
+import datetime as dt
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 from pydantic import BaseModel
 
 from vault_to_voice.api.events import parse_sse
+from vault_to_voice.api.service import RunService
 from vault_to_voice.config import Settings
 from vault_to_voice.graph.deps import GraphDeps
 from vault_to_voice.graph.state import (
@@ -137,3 +140,12 @@ def graph_responses(section_fn=good_section) -> dict:
 def sse_events(frames: Iterable[str]) -> list[tuple[str, Any]]:
     """Parse SSE frames (strings, as yielded by the API layer) into (event, data) pairs."""
     return list(parse_sse("".join(frames).split("\n")))
+
+
+def make_service(tmp_path: Path, vault_dir: Path, **responses):
+    """RunService over the fake graph: (service, idea, fake_llm). Offline, in-memory checkpoints."""
+    fake = FakeLLMClient(graph_responses(**responses))
+    deps = make_deps(tmp_path, fake)
+    deps.today = lambda: dt.date(2026, 10, 10)
+    idea = seed_idea(deps, vault_dir)
+    return RunService(deps, InMemorySaver()), idea, fake
