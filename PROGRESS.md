@@ -2,6 +2,7 @@
 
 ## Current
 - Session: S8 (M4, plan `docs/superpowers/plans/M4-critic-guardrails-eval.md` Tasks 1-9) — complete on branch `m4-quality` (from `m3-api-ui`): checkpoint msgpack allowlist (no more "unregistered type" warnings), thread-safe manifest (RLock), input/output guardrails, critic node (measured style score + LLM editor notes + safety notes) feeding the one auto-revise and shown in draft review / API / Streamlit, mini eval `v2v eval` (offline OfflineLLM over fixed sample-vault cases, `--real` for the user's models). 287 offline tests green (4 integration deselected; all 4 integration tests pass with MiniLM), ruff clean. Offline eval: 3/3 published, coverage 1.0, faithfulness 1.0, style 0.574 / 0.499 / 0.656 (mean 0.576).
+- Session: S8.5 (M4.5, plan `docs/superpowers/plans/M4.5-ui-setup.md`) — complete on `m4-quality`: shared `setup_actions.py` (ingest/style/ideas, one code path for CLI and API), API `GET /config`, `POST /ingest`, `POST /style`, `POST /ideas/detect` with 409 guards (no setup during a post run, one setup action at a time, no post run during setup; out-of-sync index -> 409; other failures -> clean 500 message), ApiClient methods (30 min read timeout), Streamlit sidebar Setup panel. 308 offline tests green (4 integration deselected), ruff clean.
 - Next: **S9 — Docker lab** (Dockerfile + compose): user-driven, guided step by step; Claude reviews.
 
 ## Roadmap
@@ -51,7 +52,10 @@
 - 2026-10-10: M4: checkpoints use an explicit msgpack allowlist (CHECKPOINT_TYPES); add new state models there (a test enforces it).
 - 2026-10-10: S8: plan code applied as written; no deviations needed.
 
+- 2026-10-10: M4.5: setup actions (ingest/style/ideas) are now in the API and Streamlit UI, reversing the M3 CLI-only decision at the user's request. CLI and API share `setup_actions.py`; the CLI keeps its behaviour.
+
 ## Known issues
+- M4.5 manual UI smoke (Setup panel against the real vault/model) pending; to do by the user.
 - Deferred minors from M1.5 review: duplicate entry ids across Daily/ subfolders resolved by path order; inserting a same-work bullet above renumbers -N ids; block-quoted bullets ignored; task checkboxes `[ ]` leak into entry body; links inside inline code get rendered.
 - First CI install is slow (torch via sentence-transformers); possible later optimisation: CPU-only torch index.
 - Deferred minors from M1 review: unreadable files (OSError) abort ingest; rebuild wipes opinion scores (full LLM rescoring); empty notes skipped silently; scorer error mid-run not caught per note; KMeans ConvergenceWarning on identical vectors; sentence-transformers FutureWarning (`get_embedding_dimension`).
