@@ -11,6 +11,7 @@ from vault_to_voice.api.events import parse_sse
 from vault_to_voice.api.service import RunService
 from vault_to_voice.config import Settings
 from vault_to_voice.graph.deps import GraphDeps
+from vault_to_voice.graph.nodes.critic import CriticReview
 from vault_to_voice.graph.state import (
     CoverageCheck,
     Outline,
@@ -134,6 +135,7 @@ def graph_responses(section_fn=good_section) -> dict:
             ],
         ),
         SectionText: section_fn,
+        CriticReview: lambda _: CriticReview(),
     }
 
 

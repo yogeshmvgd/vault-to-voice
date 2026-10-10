@@ -5,6 +5,7 @@ from langgraph.graph import END, START, StateGraph
 from vault_to_voice.graph.deps import LLM_RETRY, GraphDeps
 from vault_to_voice.graph.nodes.citations import check_citations
 from vault_to_voice.graph.nodes.context import load_context
+from vault_to_voice.graph.nodes.critic import critic
 from vault_to_voice.graph.nodes.draft import draft_section, fan_out_sections, merge_draft
 from vault_to_voice.graph.nodes.interview import build_interview_graph
 from vault_to_voice.graph.nodes.outline import (
@@ -37,6 +38,7 @@ def build_post_graph(deps: GraphDeps, *, checkpointer=None):
     g.add_node("draft_section", partial(draft_section, deps=deps), retry_policy=LLM_RETRY)
     g.add_node("merge_draft", merge_draft)
     g.add_node("check_citations", partial(check_citations, deps=deps), retry_policy=LLM_RETRY)
+    g.add_node("critic", partial(critic, deps=deps), retry_policy=LLM_RETRY)
     g.add_node("prepare_auto_revise", prepare_auto_revise)
     g.add_node("draft_review", partial(draft_review, deps=deps))
     g.add_node("publish", partial(publish, deps=deps))
@@ -51,9 +53,8 @@ def build_post_graph(deps: GraphDeps, *, checkpointer=None):
     g.add_conditional_edges("dispatch", fan_out_sections, ["draft_section"])
     g.add_edge("draft_section", "merge_draft")
     g.add_edge("merge_draft", "check_citations")
-    g.add_conditional_edges(
-        "check_citations", route_after_checks, ["prepare_auto_revise", "draft_review"]
-    )
+    g.add_edge("check_citations", "critic")
+    g.add_conditional_edges("critic", route_after_checks, ["prepare_auto_revise", "draft_review"])
     g.add_edge("prepare_auto_revise", "dispatch")
     g.add_conditional_edges(
         "draft_review",

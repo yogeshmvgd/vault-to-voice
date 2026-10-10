@@ -4,6 +4,7 @@ import structlog
 from vault_to_voice.graph.deps import GraphDeps
 from vault_to_voice.graph.memory import get_style, past_answers
 from vault_to_voice.graph.state import NoteContext, PostState, SourceChunk
+from vault_to_voice.guardrails import injection_hits
 
 log = structlog.get_logger()
 
@@ -22,12 +23,27 @@ def load_context(state: PostState, deps: GraphDeps) -> dict:
     notes += _note_contexts(deps, related, related=True)
     return {
         "notes": notes,
+        "guard_warnings": _guard_warnings(notes),
         "style": get_style(deps.store),
         "past_answers": past_answers(deps.store, exclude_idea=idea.idea_id),
         "qa": [],
         "user_rounds": {"outline": 0, "draft": 0},
         "auto_revised": False,
     }
+
+
+def _guard_warnings(notes: list[NoteContext]) -> list[str]:
+    """Input guardrail: report instruction-like text in notes (it is still only data)."""
+    warnings = []
+    for note in notes:
+        hits = injection_hits(note.text)
+        if hits:
+            log.warning("guard_injection_suspect", note_id=note.note_id, hits=hits)
+            warnings.append(
+                f"Note {note.note_id} contains instruction-like text ({hits[0]!r}); "
+                "it was treated as data, but check the draft."
+            )
+    return warnings
 
 
 def _note_contexts(deps: GraphDeps, note_ids: list[str], *, related: bool) -> list[NoteContext]:

@@ -11,6 +11,8 @@ from vault_to_voice.graph.nodes.review import (
 )
 from vault_to_voice.graph.state import (
     CitationReport,
+    CriticNote,
+    CriticReport,
     Flag,
     Outline,
     Paragraph,
@@ -132,3 +134,57 @@ def test_edit_replaces_section_with_user_sources_and_rechecks(state, deps):
 def test_bad_payloads_reask_with_error(state, deps, payload):
     upd = review(state, deps, payload)
     assert route_after_draft_review({**state, **upd}) == "draft_review" and upd["review_error"]
+
+
+def major(section_id="s1", note="Too formal for this author."):
+    return CriticNote(section_id=section_id, kind="voice", severity="major", note=note)
+
+
+def test_route_after_checks_also_revises_for_the_critic():
+    clean = CitationReport(n_claims=1, n_supported=1)
+    minor = CriticReport(notes=[CriticNote(section_id="s1", kind="clarity", note="ok")])
+    for critic, expected in [
+        (CriticReport(notes=[major()]), "prepare_auto_revise"),
+        (CriticReport(style_score=0.1, style_ok=False), "prepare_auto_revise"),
+        (minor, "draft_review"),
+    ]:
+        state = {"citation_report": clean, "critic_report": critic, "auto_revised": False}
+        assert route_after_checks(state) == expected
+    done = {"citation_report": clean, "critic_report": CriticReport(notes=[major()])}
+    assert route_after_checks({**done, "auto_revised": True}) == "draft_review"
+
+
+def test_prepare_auto_revise_merges_citation_and_critic_feedback(state):
+    critic = CriticReport(style_score=0.3, style_ok=False, notes=[major("s2", "Say more.")])
+    upd = prepare_auto_revise({**state, "critic_report": critic})
+    assert upd["revise_ids"] == ["s1", "s2"]  # low style score: every section is redrafted
+    s2 = upd["section_feedback"]["s2"]
+    assert "Bad claim." in s2 and "- [voice] Say more." in s2 and "style match 0.3" in s2
+    assert "Bad claim." not in upd["section_feedback"]["s1"]
+
+
+def test_prepare_auto_revise_ignores_minor_notes():
+    minor = CriticReport(notes=[CriticNote(section_id="s1", kind="clarity", note="meh")])
+    upd = prepare_auto_revise({"citation_report": flagged(), "critic_report": minor})
+    assert upd["revise_ids"] == ["s2"]
+
+
+def test_payload_carries_critic_notes_style_score_and_warnings(state, deps):
+    critic = CriticReport(style_score=0.72, notes=[major()])
+    full = {**state, "critic_report": critic, "guard_warnings": ["Note n1 contains ..."]}
+    with patch(
+        "vault_to_voice.graph.nodes.review.interrupt", return_value={"action": "approve"}
+    ) as fake_interrupt:
+        draft_review(full, deps)
+    sent = fake_interrupt.call_args.args[0]
+    assert sent["style_score"] == 0.72 and sent["critic_notes"][0]["note"] == major().note
+    assert sent["warnings"] == ["Note n1 contains ..."]
+
+
+def test_payload_without_a_critic_report(state, deps):
+    with patch(
+        "vault_to_voice.graph.nodes.review.interrupt", return_value={"action": "approve"}
+    ) as fake_interrupt:
+        draft_review(state, deps)
+    sent = fake_interrupt.call_args.args[0]
+    assert sent["critic_notes"] == [] and sent["style_score"] is None and sent["warnings"] == []

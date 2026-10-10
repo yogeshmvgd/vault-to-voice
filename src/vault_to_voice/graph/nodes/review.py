@@ -9,24 +9,49 @@ from vault_to_voice.graph.state import Paragraph, PostState, ReviewDecision, Sec
 from vault_to_voice.index.chunking import split_paragraphs
 from vault_to_voice.style.stats import split_sentences
 
+CITATION_HEADER = (
+    "These sentences are not supported by their cited sources. Cite the right note or "
+    "answer ids, rewrite them so the sources support them, or drop them:\n"
+)
+CRITIC_HEADER = "The editor found these problems; fix them:\n"
+VOICE_LINE = (
+    "- [voice] The draft does not sound like the author (style match {score}): follow the "
+    "Voice section for sentence length, first person and punctuation habits."
+)
+
 
 def route_after_checks(state: PostState) -> str:
-    if state["citation_report"].flags and not state.get("auto_revised"):
+    critic = state.get("critic_report")
+    problems = state["citation_report"].flags or (critic is not None and critic.needs_revision)
+    if problems and not state.get("auto_revised"):
         return "prepare_auto_revise"
     return "draft_review"
 
 
 def prepare_auto_revise(state: PostState) -> dict:
-    problems: dict[str, list[str]] = defaultdict(list)
+    """One automatic revision of the sections with citation flags or major critic notes."""
+    cited: dict[str, list[str]] = defaultdict(list)
     for flag in state["citation_report"].flags:
-        problems[flag.section_id].append(f'- "{flag.text}" ({flag.reason.replace("_", " ")})')
-    feedback = {
-        sid: "These sentences are not supported by their cited sources. Cite the right note or "
-        "answer ids, rewrite them so the sources support them, or drop them:\n" + "\n".join(lines)
-        for sid, lines in problems.items()
-    }
+        cited[flag.section_id].append(f'- "{flag.text}" ({flag.reason.replace("_", " ")})')
+    edits: dict[str, list[str]] = defaultdict(list)
+    critic = state.get("critic_report")
+    if critic is not None:
+        for note in critic.notes:
+            if note.severity == "major":
+                edits[note.section_id].append(f"- [{note.kind}] {note.note}")
+        if not critic.style_ok:
+            for section in state.get("draft", []):
+                edits[section.section_id].append(VOICE_LINE.format(score=critic.style_score))
+    feedback = {}
+    for sid in sorted(set(cited) | set(edits)):
+        parts = []
+        if cited[sid]:
+            parts.append(CITATION_HEADER + "\n".join(cited[sid]))
+        if edits[sid]:
+            parts.append(CRITIC_HEADER + "\n".join(edits[sid]))
+        feedback[sid] = "\n\n".join(parts)
     return {
-        "revise_ids": sorted(problems),
+        "revise_ids": sorted(feedback),
         "section_feedback": feedback,
         "feedback": "",
         "auto_revised": True,
@@ -49,6 +74,7 @@ def draft_review(state: PostState, deps: GraphDeps) -> dict:
     rounds = state.get("user_rounds") or {"outline": 0, "draft": 0}
     left = deps.settings.max_review_rounds - rounds["draft"]
     report = state["citation_report"]
+    critic = state.get("critic_report")
     payload = interrupt(
         {
             "type": "draft_review",
@@ -56,6 +82,9 @@ def draft_review(state: PostState, deps: GraphDeps) -> dict:
             "draft": [d.model_dump() for d in state["draft"]],
             "flags": [f.model_dump() for f in report.flags],
             "coverage": report.coverage,
+            "critic_notes": [n.model_dump() for n in critic.notes] if critic else [],
+            "style_score": critic.style_score if critic else None,
+            "warnings": state.get("guard_warnings", []),
             "rounds_left": left,
             "error": state.get("review_error"),
         }

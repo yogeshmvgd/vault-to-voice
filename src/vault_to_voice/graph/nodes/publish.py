@@ -13,6 +13,7 @@ def publish(state: PostState, deps: GraphDeps) -> dict:
         raise RuntimeError("GraphDeps.publisher is not configured")
     idea, outline, draft = state["idea"], state["outline"], state["draft"]
     report = state["citation_report"]
+    critic = state.get("critic_report")
     qa = state.get("qa", [])
     today = deps.today()
     front = "\n".join(
@@ -34,6 +35,9 @@ def publish(state: PostState, deps: GraphDeps) -> dict:
         "date": today.isoformat(),
         "citation_coverage": report.coverage,
         "flags": [f.model_dump() for f in report.flags],
+        "style_score": critic.style_score if critic else None,
+        "critic_notes": [n.model_dump() for n in critic.notes] if critic else [],
+        "guard_warnings": state.get("guard_warnings", []),
         "paragraphs": [
             {
                 "section_id": section.section_id,

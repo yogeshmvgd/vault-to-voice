@@ -7,8 +7,9 @@ from langgraph.types import Command
 
 from tests.fakes import FakeLLMClient, graph_responses, make_deps, seed_idea
 from vault_to_voice.graph.builder import build_post_graph
+from vault_to_voice.graph.nodes.critic import CriticReview
 from vault_to_voice.graph.runner import run_until_interrupt, start_input, thread_config
-from vault_to_voice.graph.state import Outline, Paragraph, SectionText, Sentence
+from vault_to_voice.graph.state import CriticNote, Outline, Paragraph, SectionText, Sentence
 
 ANSWERS = ["The tells.", "Twenty deaths.", "Patience."]
 APPROVE = {"action": "approve"}
@@ -89,3 +90,26 @@ def test_outline_revise_then_draft_edit_then_publish(tmp_path, vault_dir):
         Path(values["final_path"]).with_suffix(".sources.json").read_text(encoding="utf-8")
     )
     assert side["paragraphs"][-1]["sources"] == ["user"]
+
+
+def test_major_critic_note_triggers_one_auto_revision(tmp_path, vault_dir):
+    graph, _, idea, fake = make_graph(tmp_path, vault_dir)
+    note = CriticNote(section_id="s1", kind="substance", severity="major", note="Too generic.")
+    fake.responses[CriticReview] = lambda _: CriticReview(notes=[note])
+    _, last, _ = drive(graph, idea, [*ANSWERS, APPROVE])
+    assert last["type"] == "draft_review" and last["flags"] == []
+    assert [n["note"] for n in last["critic_notes"]] == ["Too generic."]
+    assert count(fake, SectionText) == 3  # 2 drafts + only the criticised section, once
+    assert count(fake, CriticReview) == 2  # after the first draft and after the revision
+    revised = [p for s, p in fake.calls if s is SectionText][-1]
+    assert "Too generic." in revised
+
+
+def test_sidecar_records_critic_results(tmp_path, vault_dir):
+    graph, _, idea, _ = make_graph(tmp_path, vault_dir)
+    _, _, values = drive(graph, idea, [*ANSWERS, APPROVE, APPROVE])
+    side = json.loads(
+        Path(values["final_path"]).with_suffix(".sources.json").read_text(encoding="utf-8")
+    )
+    assert side["style_score"] is None  # no style profile in the test Store
+    assert side["critic_notes"] == [] and side["guard_warnings"] == []
