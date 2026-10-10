@@ -1,0 +1,23 @@
+# secrets
+.env
+
+# runtime data (may contain real-vault text)
+data/
+outbox/*
+!outbox/.gitkeep
+eval/report.json
+
+# never commit a real vault
+vault/
+*.obsidian/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
