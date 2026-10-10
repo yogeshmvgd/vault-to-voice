@@ -144,10 +144,25 @@ def sse_events(frames: Iterable[str]) -> list[tuple[str, Any]]:
     return list(parse_sse("".join(frames).split("\n")))
 
 
+def setup_responses() -> dict:
+    """Fake answers for the setup actions (opinion scoring, style tone, idea labels)."""
+    from vault_to_voice.ideas.labeler import ClusterLabel
+    from vault_to_voice.ideas.opinion import OpinionScore
+    from vault_to_voice.style.profile import ToneSummary
+
+    return {
+        OpinionScore: lambda _: OpinionScore(score=0.8, highlights=["strong view"]),
+        ToneSummary: lambda _: ToneSummary(tone=["wry"], voice_notes="Punchy.", exemplars=[]),
+        ClusterLabel: lambda _: ClusterLabel(title="Idea", angle="Angle.", theme="theme"),
+    }
+
+
 def make_service(tmp_path: Path, vault_dir: Path, **responses):
     """RunService over the fake graph: (service, idea, fake_llm). Offline, in-memory checkpoints."""
-    fake = FakeLLMClient(graph_responses(**responses))
-    deps = make_deps(tmp_path, fake)
+    fake = FakeLLMClient({**setup_responses(), **graph_responses(**responses)})
+    deps = make_deps(
+        tmp_path, fake, vault_path=vault_dir, vault_format="flat", min_notes=2, min_opinionated=2
+    )
     deps.today = lambda: dt.date(2026, 10, 10)
     idea = seed_idea(deps, vault_dir)
     return RunService(deps, InMemorySaver()), idea, fake

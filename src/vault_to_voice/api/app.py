@@ -17,6 +17,10 @@ class ResumeRequest(BaseModel):
     payload: str | dict
 
 
+class IngestRequest(BaseModel):
+    no_score: bool = False
+
+
 class PostOut(BaseModel):
     final_path: str
     markdown: str
@@ -42,6 +46,22 @@ def create_app(service: RunService) -> FastAPI:
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok", "tracing": service.tracing}
+
+    @app.get("/config")
+    def config() -> dict:
+        return service.config()
+
+    @app.post("/ingest")
+    def ingest(body: IngestRequest | None = None) -> dict:
+        return service.ingest(no_score=bool(body and body.no_score))
+
+    @app.post("/style")
+    def style() -> dict:
+        return service.build_style()
+
+    @app.post("/ideas/detect")
+    def detect_ideas() -> list[Idea]:
+        return service.detect_ideas()
 
     @app.get("/ideas")
     def ideas() -> list[Idea]:

@@ -1,17 +1,19 @@
+import dataclasses
 import json
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any, Literal
 
 from langgraph.types import Command
 from pydantic import BaseModel
 
+from vault_to_voice import setup_actions
 from vault_to_voice.api.events import stream_run
 from vault_to_voice.graph.builder import build_post_graph
 from vault_to_voice.graph.deps import GraphDeps
 from vault_to_voice.graph.runner import start_input, thread_config
-from vault_to_voice.ideas.detector import Idea
+from vault_to_voice.ideas.detector import Idea, IndexOutOfSyncError
 
 ThreadStatus = Literal["new", "waiting", "stalled", "published"]
 
@@ -26,6 +28,14 @@ class NotFound(ServiceError):
 
 class Conflict(ServiceError):
     status_code = 409
+
+
+class BadRequest(ServiceError):
+    status_code = 400
+
+
+class ActionFailed(ServiceError):
+    status_code = 500
 
 
 class ThreadView(BaseModel):
@@ -88,6 +98,7 @@ class RunService:
         self.graph = build_post_graph(deps, checkpointer=checkpointer)
         self._locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
+        self._maintenance = threading.Lock()  # one setup action at a time, never during runs
 
     # ---- reads -------------------------------------------------------------------------
     def list_ideas(self) -> list[Idea]:
@@ -171,6 +182,8 @@ class RunService:
         if not lock.acquire(blocking=False):
             raise Conflict(f"thread {thread_id} is already running; wait for it to finish")
         try:
+            if self._maintenance.locked():
+                raise Conflict("a setup action is running; wait for it to finish")
             status = self.thread(thread_id).status
             if status != needs:
                 raise Conflict(f"{_NEEDS[needs]} (status: {status})")
@@ -178,3 +191,70 @@ class RunService:
             lock.release()
             raise
         return _LockedStream(lock, stream_run(self.graph, thread_config(thread_id), value))
+
+    # ---- setup actions (same code path as the CLI) ------------------------------------------
+    def config(self) -> dict:
+        """Non-secret settings for display. Never add keys here."""
+        s = self.deps.settings
+        return {
+            "vault_path": str(s.vault_path),
+            "vault_format": s.vault_format,
+            "llm_model": s.llm_model,
+            "embedding_provider": s.embedding_provider,
+            "data_dir": str(s.data_dir),
+            "outbox_dir": str(s.outbox_dir),
+        }
+
+    def _setup(self, name: str, action: Callable[[], Any]) -> Any:
+        if not self._maintenance.acquire(blocking=False):
+            raise Conflict("another setup action is running; wait for it to finish")
+        try:
+            with self._locks_guard:
+                running = any(lock.locked() for lock in self._locks.values())
+            if running:
+                raise Conflict("a post is being written; wait for that step to finish")
+            try:
+                return action()
+            except ServiceError:
+                raise
+            except IndexOutOfSyncError as exc:
+                raise Conflict(str(exc)) from exc
+            except setup_actions.NoNotesError as exc:
+                raise BadRequest(str(exc)) from exc
+            except Exception as exc:  # shown to the user as a message, never a traceback
+                raise ActionFailed(f"{name} failed: {exc}") from exc
+        finally:
+            self._maintenance.release()
+
+    def ingest(self, *, no_score: bool = False) -> dict:
+        d = self.deps
+
+        def run() -> dict:
+            result = setup_actions.ingest_vault(
+                d.settings, d.manifest, d.index, d.embedder, None if no_score else d.llm
+            )
+            out = dataclasses.asdict(result.report)
+            out["stats"] = dataclasses.asdict(result.stats) if result.stats else None
+            return out
+
+        return self._setup("index vault", run)
+
+    def build_style(self) -> dict:
+        d = self.deps
+
+        def run() -> dict:
+            profile = setup_actions.build_style(d.settings, d.llm, d.store)
+            return {
+                "version": profile.version,
+                "path": str(d.settings.style_profile_path),
+                "tone": profile.tone.tone,
+                "voice_notes": profile.tone.voice_notes,
+            }
+
+        return self._setup("build style profile", run)
+
+    def detect_ideas(self) -> list[Idea]:
+        d = self.deps
+        return self._setup(
+            "find ideas", lambda: setup_actions.find_ideas(d.settings, d.manifest, d.index, d.llm)
+        )
