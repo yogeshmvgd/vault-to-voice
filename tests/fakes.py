@@ -7,6 +7,15 @@ from pydantic import BaseModel
 
 from vault_to_voice.config import Settings
 from vault_to_voice.graph.deps import GraphDeps
+from vault_to_voice.graph.state import (
+    CoverageCheck,
+    Outline,
+    Paragraph,
+    Question,
+    Section,
+    SectionText,
+    Sentence,
+)
 from vault_to_voice.ideas.detector import Idea, make_idea_id
 from vault_to_voice.index.embedder import HashEmbedder
 from vault_to_voice.index.faiss_store import FaissStore
@@ -87,3 +96,38 @@ def seed_idea(deps: GraphDeps, vault_dir: Path, note_ids=("n0", "n1", "n2", "n3"
     )
     deps.manifest.save_ideas([idea])
     return idea
+
+
+GOOD_SENTENCE = NOTES["n0"].split("\n\n")[0]
+
+
+def good_section(_prompt) -> SectionText:
+    return SectionText(
+        paragraphs=[
+            Paragraph(
+                sentences=[
+                    Sentence(text=GOOD_SENTENCE, sources=["n0"]),
+                    Sentence(text="That is the deal.", kind="connective"),
+                ]
+            )
+        ]
+    )
+
+
+def graph_responses(section_fn=good_section) -> dict:
+    return {
+        Question: lambda _: Question(question="What made it fair?", grounding_note_ids=["n0"]),
+        CoverageCheck: lambda _: CoverageCheck(enough=True),
+        Outline: lambda _: Outline(
+            title="Fair Bosses",
+            sections=[
+                Section(
+                    id="a", heading="Tells", point="Tells make it fair.", planned_sources=["n0"]
+                ),
+                Section(
+                    id="b", heading="Learning", point="Death teaches.", planned_sources=["qa:1"]
+                ),
+            ],
+        ),
+        SectionText: section_fn,
+    }
