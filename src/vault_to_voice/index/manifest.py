@@ -1,8 +1,11 @@
+import functools
 import json
 import sqlite3
-from collections.abc import Iterable
+import threading
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, TypeVar
 
 from vault_to_voice.vault.models import Note
 
@@ -24,6 +27,25 @@ CREATE TABLE IF NOT EXISTS ideas (
   idea_id TEXT PRIMARY KEY, data TEXT NOT NULL, status TEXT NOT NULL
 );
 """
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _locked(method: F) -> F:
+    """Run a Manifest method under the instance lock.
+
+    One sqlite3 connection is shared by every API worker thread (check_same_thread=False);
+    sqlite3 connections are not safe for concurrent use, so each method holds the lock for
+    its whole read or read-modify-commit sequence. RLock: locked methods call each other.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self: "Manifest", *args: Any, **kwargs: Any) -> Any:
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper  # type: ignore[return-value]
+
 
 _NOTE_COLS = "note_id, path, title, type, date, hash, opinion_score, highlights, work_id, links"
 
@@ -62,10 +84,12 @@ class Manifest:
     def __init__(self, path: Path | str):
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
         self.conn = sqlite3.connect(str(path), check_same_thread=False)
         self.conn.executescript(SCHEMA)
         self._migrate()
 
+    @_locked
     def _migrate(self) -> None:
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(notes)")}
         if "work_id" not in cols:
@@ -74,9 +98,11 @@ class Manifest:
             self.conn.execute("ALTER TABLE notes ADD COLUMN links TEXT NOT NULL DEFAULT '[]'")
         self.conn.commit()
 
+    @_locked
     def close(self) -> None:
         self.conn.close()
 
+    @_locked
     def diff(self, notes: Iterable[Note]) -> Diff:
         known = dict(self.conn.execute("SELECT note_id, hash FROM notes"))
         d = Diff()
@@ -93,6 +119,7 @@ class Manifest:
         d.deleted = sorted(set(known) - seen)
         return d
 
+    @_locked
     def upsert_note(self, note: Note) -> None:
         self.conn.execute(
             """INSERT INTO notes (note_id, path, title, type, date, hash, opinion_score,
@@ -115,6 +142,7 @@ class Manifest:
         )
         self.conn.commit()
 
+    @_locked
     def delete_note(self, note_id: str) -> list[int]:
         ids = self.chunk_ids(note_id)
         self.conn.execute("DELETE FROM chunks WHERE note_id = ?", (note_id,))
@@ -122,6 +150,7 @@ class Manifest:
         self.conn.commit()
         return ids
 
+    @_locked
     def add_chunks(self, note_id: str, texts: list[str]) -> list[int]:
         ids = []
         for i, text in enumerate(texts):
@@ -132,12 +161,14 @@ class Manifest:
         self.conn.commit()
         return ids
 
+    @_locked
     def chunk_ids(self, note_id: str) -> list[int]:
         rows = self.conn.execute(
             "SELECT chunk_id FROM chunks WHERE note_id = ? ORDER BY para_idx", (note_id,)
         )
         return [r[0] for r in rows]
 
+    @_locked
     def get_chunks(self, chunk_ids: list[int]) -> list[Chunk]:
         if not chunk_ids:
             return []
@@ -149,6 +180,7 @@ class Manifest:
         by_id = {r[0]: Chunk(*r) for r in rows}
         return [by_id[i] for i in chunk_ids if i in by_id]
 
+    @_locked
     def chunks_for_notes(self, note_ids: list[str]) -> list[Chunk]:
         if not note_ids:
             return []
@@ -160,6 +192,7 @@ class Manifest:
         )
         return [Chunk(*r) for r in rows]
 
+    @_locked
     def chunk_count(self) -> int:
         return self.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
 
@@ -168,10 +201,12 @@ class Manifest:
             *r[:7], highlights=json.loads(r[7]), work_id=r[8], links=json.loads(r[9] or "[]")
         )
 
+    @_locked
     def notes(self) -> list[NoteRow]:
         rows = self.conn.execute(f"SELECT {_NOTE_COLS} FROM notes ORDER BY note_id")
         return [self._row(r) for r in rows]
 
+    @_locked
     def get_note(self, note_id: str) -> NoteRow | None:
         r = self.conn.execute(
             f"SELECT {_NOTE_COLS} FROM notes WHERE note_id = ?",
@@ -179,6 +214,7 @@ class Manifest:
         ).fetchone()
         return self._row(r) if r else None
 
+    @_locked
     def set_opinion(self, note_id: str, score: float, highlights: list[str]) -> None:
         self.conn.execute(
             "UPDATE notes SET opinion_score = ?, highlights = ? WHERE note_id = ?",
@@ -186,16 +222,19 @@ class Manifest:
         )
         self.conn.commit()
 
+    @_locked
     def notes_needing_opinion(self) -> list[str]:
         rows = self.conn.execute(
             "SELECT note_id FROM notes WHERE opinion_score IS NULL ORDER BY note_id"
         )
         return [r[0] for r in rows]
 
+    @_locked
     def get_meta(self, key: str) -> str | None:
         r = self.conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
         return r[0] if r else None
 
+    @_locked
     def set_meta(self, key: str, value: str) -> None:
         self.conn.execute(
             "INSERT INTO meta (key, value) VALUES (?, ?) "
@@ -204,11 +243,13 @@ class Manifest:
         )
         self.conn.commit()
 
+    @_locked
     def clear_index(self) -> None:
         self.conn.execute("DELETE FROM chunks")
         self.conn.execute("DELETE FROM notes")
         self.conn.commit()
 
+    @_locked
     def save_ideas(self, ideas: list) -> None:
         keep = {i.idea_id for i in ideas}
         for (idea_id,) in self.conn.execute(
@@ -224,18 +265,21 @@ class Manifest:
             )
         self.conn.commit()
 
+    @_locked
     def list_ideas(self) -> list:
         from vault_to_voice.ideas.detector import Idea
 
         rows = self.conn.execute("SELECT data FROM ideas ORDER BY idea_id")
         return [Idea.model_validate_json(r[0]) for r in rows]
 
+    @_locked
     def get_idea(self, idea_id: str):
         from vault_to_voice.ideas.detector import Idea
 
         r = self.conn.execute("SELECT data FROM ideas WHERE idea_id = ?", (idea_id,)).fetchone()
         return Idea.model_validate_json(r[0]) if r else None
 
+    @_locked
     def set_idea_status(self, idea_id: str, status: str) -> None:
         r = self.conn.execute("SELECT data FROM ideas WHERE idea_id = ?", (idea_id,)).fetchone()
         if r is None:
