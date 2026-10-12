@@ -10,3 +10,6 @@ data/
 outbox/*
 eval/report.json
 !outbox/.gitkeep
+
+# personal Obsidian templates (not part of the repo)
+obsidian_templates/
